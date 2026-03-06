@@ -1,0 +1,15 @@
+{
+  "name": "@starktech/core",
+  "description": "Core logic for velo",
+  "exports": {
+    ".": {
+      "import": "./lib/index.ts",
+      "types": "./lib/index.ts"
+    }
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "jest"
+  }
+}

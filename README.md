@@ -7,7 +7,7 @@ Time tracking cli.
 ### Installation
 
 ```bash
-npm install -g @starktech/velo
+npm install -g @starktech/velo@latest
 ```
 
 ### Usage

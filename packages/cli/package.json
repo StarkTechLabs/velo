@@ -1,0 +1,27 @@
+{
+  "name": "@starktech/velo",
+  "description": "CLI for velo",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "velo": "dist/main.js"
+  },
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "watch": "node esbuild.config.js --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.3",
+    "@types/node": "^25.3.5",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@starktech/core": "*",
+    "commander": "^14.0.3"
+  }
+}
