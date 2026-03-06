@@ -1,0 +1,21 @@
+{
+  "name": "@starktech/velo",
+  "description": "Time tracking tool.",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "velo",
+    "starktech",
+    "time",
+    "tracking"
+  ],
+  "author": "starktechlabs",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/starktechlabs/velo"
+  }
+}
