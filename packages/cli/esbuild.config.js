@@ -27,7 +27,7 @@ async function runBuild() {
       },
       sourcemap: true,
       minify: !isWatch,
-      external: ["commander"],
+      external: ["commander", "knex", "better-sqlite3", "pg", "pg-query-stream", "mysql", "mysql2", "sqlite3", "oracledb", "tedious"],
       define: {
         "process.env.NODE_ENV": '"production"',
       },

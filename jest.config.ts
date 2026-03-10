@@ -7,6 +7,7 @@ export default {
     "^.+\\.tsx?$": "ts-jest",
   },
   moduleNameMapper: {
+    "^@/(.*)$": "<rootDir>/packages/core/lib/$1",
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
   // File extensions Jest should look for

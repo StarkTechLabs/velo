@@ -1,23 +1,25 @@
-import knex from "knex"
+import knex, { Knex } from "knex"
 
-import { getConfig } from "@/common/config"
+import { Config } from "@/common/config"
+import { EmbeddedMigrationSource } from "@/migrations"
 
-declare global {
-  var db: knex.Knex
-}
-if (!global.db) {
-  const config = getConfig()
-  if (!config) {
-    throw new Error("Configuration not found. Please run 'velo init' to set up the configuration.")
-  }
+let _db: Knex | null = null
 
-  global.db = knex({
+export async function initDb(config: Config): Promise<void> {
+  if (_db) return
+  _db = knex({
     client: "better-sqlite3",
-    connection: {
-      filename: config.databaseFilePath,
-    },
+    connection: { filename: config.databaseFilePath },
+    useNullAsDefault: true,
   })
+  await _db.migrate.latest({ migrationSource: new EmbeddedMigrationSource() })
 }
 
-const db = global.db
-export default db
+export function getDb(): Knex {
+  if (!_db) throw new Error("Database not initialized. Call initDb(config) first.")
+  return _db
+}
+
+export function setDb(instance: Knex): void {
+  _db = instance
+}

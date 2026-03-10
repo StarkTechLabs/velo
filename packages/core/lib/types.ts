@@ -6,20 +6,6 @@ export const timeframeSchema = z.string().regex(/^(\d+(?:\.\d+)?)([hdm])$/, {
     "Invalid timeframe format. Expected format: <number><unit> where unit is m(minute), h(hour), or d(day)",
 })
 
-const idNameSchema = z.object({
-  name: z.string().nullish(),
-  id: z.string().nullish(),
-})
-
-// Schema for user object
-const userSchema = idNameSchema
-
-// Schema for team object
-const teamSchema = idNameSchema
-
-// Schema for channel object
-const channelSchema = idNameSchema
-
 // Main WorkEvent schema
 export const workEventSchema = z.object({
   id: z.string().nullish(),
@@ -27,9 +13,8 @@ export const workEventSchema = z.object({
   timeframe: timeframeSchema.nonempty("Timeframe is required"),
   project: z.string().nonempty("Project is required"),
   description: z.string().nullish(),
-  user: userSchema.nullish(),
-  team: teamSchema.nullish(),
-  channel: channelSchema.nullish(),
+  userId: z.string().nullish(),
+  channel: z.string().nullish(),
   created: z.iso
     .datetime({ local: false })
     .nonempty()
@@ -54,10 +39,6 @@ export const workEventUpdateSchema = z
 
 export type WorkEvent = z.infer<typeof workEventSchema>
 export type WorkEventUpdate = z.infer<typeof workEventUpdateSchema>
-
-export type User = z.infer<typeof userSchema>
-export type Team = z.infer<typeof teamSchema>
-export type Channel = z.infer<typeof channelSchema>
 
 export interface GroupedEvent {
   date: string

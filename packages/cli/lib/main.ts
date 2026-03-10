@@ -4,15 +4,11 @@ import * as path from "path"
 import { fileURLToPath } from "url"
 
 import { registerCommands } from "@/commands"
-import { ensureConfig } from "@starktech/core"
+import { ensureConfig, initDb } from "@starktech/core"
 
 // ES modules equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-
-const program = new Command()
-
-const config = ensureConfig()
 
 // Read version from package.json
 export const getVersion = (): string => {
@@ -26,12 +22,26 @@ export const getVersion = (): string => {
   }
 }
 
-program
-  .name("velo")
-  .description("A CLI to track and manage your time.")
-  .version(getVersion(), "-v, --version")
+async function main() {
+  const config = ensureConfig()
+  await initDb(config)
 
-registerCommands(program, config)
+  const program = new Command()
+  program
+    .name("velo")
+    .description("A CLI to track and manage your time.")
+    .version(getVersion(), "-v, --version")
 
-// Parse command-line arguments
-program.parse()
+  registerCommands(program, config)
+
+  await program.parseAsync()
+}
+
+main()
+  .then(() => {
+    process.exit(0)
+  })
+  .catch((err) => {
+    console.error(err)
+    process.exit(1)
+  })

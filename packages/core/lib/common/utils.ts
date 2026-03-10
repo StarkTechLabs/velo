@@ -5,7 +5,7 @@ export const parseTimeframe = (timeframe: string): TimeframeData => {
   const durationMatch = timeframe.match(/^(\d+(?:\.\d+)?)([hdm])$/)
   if (!durationMatch) {
     throw new Error(
-      "Invalid timeframe format. Expected format: <number><unit> where unit is m(minute), h(hour), or d(day). Examples: 1h, 30m, 2d, 0.5d",
+      "Invalid timeframe format. Use format like '1h', '30m', '2d', '1.5h', or '0.5d'",
     )
   }
 

@@ -1,6 +1,7 @@
 {
   "name": "@starktech/core",
   "description": "Core logic for velo",
+  "private": true,
   "exports": {
     ".": {
       "import": "./lib/index.ts",

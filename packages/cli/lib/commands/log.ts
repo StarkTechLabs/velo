@@ -1,4 +1,4 @@
-import { Config, WorkEvent, validateTimeframe } from "@starktech/core"
+import { Config, WorkEvent, insert, validateTimeframe } from "@starktech/core"
 import { Command } from "commander"
 
 import { CommandRegistration } from "@/types"
@@ -11,10 +11,6 @@ export const logCommand: CommandRegistration = {
       .option(
         "-u, --user <user_id>",
         "Save log for given user id. If not provided, it will leverage the default.",
-      )
-      .option(
-        "--team <team_id>",
-        "Save log for given team id. If not provided, it will leverage the default.",
       )
       .option(
         "--channel <channel_id>",
@@ -34,35 +30,29 @@ export const logCommand: CommandRegistration = {
         "<timeframe> Expected format: <number><unit> where unit is m(minute), h(hour), or d(day).",
       )
       .addHelpText("after", "<event> is the description or task that was worked on.")
-      .action((project: string, timeframe: string, event: string, options) => {
+      .action(async (project: string, timeframe: string, event: string, options) => {
         // validate timeframe
         const err = validateTimeframe(timeframe)
         if (err) {
           program.error(err as string)
         }
 
-        const _workEvent: WorkEvent = {
+        const workEvent: WorkEvent = {
           project,
           timeframe,
           description: event,
           timestamp: options.timestamp || new Date().toISOString(),
           created: new Date().toISOString(),
           updated: new Date().toISOString(),
-          channel: {
-            id: options.channel,
-            name: "cli",
-          },
-          team: {
-            id: options.team || "cli",
-            name: "cli",
-          },
-          user: {
-            id: options.user || config.defaultUserId,
-            name: "cli",
-          },
+          channel: options.channel ?? null,
+          userId: options.user || config.defaultUserId,
         }
 
-        console.log("❌ Not implemented yet.")
+        const id = await insert(workEvent)
+        console.log(`Logged`)
+        console.log(`  Project   : ${workEvent.project}`)
+        console.log(`  Timeframe : ${workEvent.timeframe}`)
+        console.log(`  Event     : ${workEvent.description}`)
       })
   },
 }

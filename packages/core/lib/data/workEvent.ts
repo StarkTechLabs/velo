@@ -1,9 +1,7 @@
 import { v7 } from "uuid"
 
-import db from "../common/db"
-import { WorkEvent } from "../types"
-
-import { parseTimeframe } from "../common/utils"
+import { getDb } from "@/common/db"
+import { WorkEvent } from "@/types"
 
 const WorkEventColumns = [
   "id",
@@ -12,6 +10,7 @@ const WorkEventColumns = [
   "project",
   "description",
   { userId: "user_id" },
+  "channel",
   "meta",
   "created",
   "updated",
@@ -20,6 +19,7 @@ const WorkEventColumns = [
 
 // Helper function to build query with filters
 const buildQuery = (term?: string, projects?: string[], minDate?: Date, maxDate?: Date) => {
+  const db = getDb()
   let query = db("work_event").select(WorkEventColumns).where("work_event.deleted", false)
 
   if (term) {
@@ -39,18 +39,20 @@ const buildQuery = (term?: string, projects?: string[], minDate?: Date, maxDate?
     query = query.whereIn("project", projects)
   }
   if (minDate) {
-    query = query.andWhere("timestamp", ">=", minDate)
+    query = query.andWhere("timestamp", ">=", minDate.toISOString())
   }
   if (maxDate) {
-    query = query.andWhere("timestamp", "<=", maxDate)
+    query = query.andWhere("timestamp", "<=", maxDate.toISOString())
   }
 
   return query
 }
 
 export async function fetchProjects({ userId }: { userId: string }) {
+  const db = getDb()
   const query = db("work_event")
     .where("user_id", userId)
+    .where("deleted", false)
     .select(["project"])
     .groupBy("project")
     .orderBy("project", "asc")
@@ -74,10 +76,8 @@ export async function fetchPaginated({
   maxDate?: Date
   page?: number
   pageSize?: number
-  trackingOnly?: boolean
   userId?: string
 }): Promise<{ data: WorkEvent[]; total: number }> {
-  // Skip caching if search term is provided
   const query = buildQuery(term, projects, minDate, maxDate)
   query.andWhere("user_id", userId)
 
@@ -93,40 +93,36 @@ export async function fetchPaginated({
   return { data: rows, total }
 }
 
-export async function insert(data: WorkEvent) {
-  const result = await db("work_event")
-    .insert({
-      id: data.id || v7(),
-      timeframe: parseTimeframe(data.timeframe),
-      timestamp: data.timestamp || new Date(Date.now()),
-      project: data.project || "",
-      description: data.description || "",
-      meta: {
-        channel_id: data.channel?.id || null,
-        channel_name: data.channel?.name || null,
-        team_id: data.team?.id || null,
-        team_name: data.team?.name || null,
-        user_id: data.user?.id || null,
-        user_name: data.user?.name || null,
-      },
-      user_id: data.user?.id || "",
-    })
-    .returning(["id", "timeframe", "project", "description", "timestamp"])
-  return result && result?.[0]
+export async function insert(data: WorkEvent): Promise<string> {
+  const db = getDb()
+  const id = data.id || v7()
+  await db("work_event").insert({
+    id,
+    timeframe: data.timeframe,
+    timestamp: data.timestamp || new Date().toISOString(),
+    project: data.project || "",
+    description: data.description || "",
+    channel: data.channel || null,
+    user_id: data.userId || null,
+    meta: JSON.stringify({}),
+  })
+  return id
 }
 
 export async function remove(id: string) {
-  return db("work_event").where({ id }).update({ deleted: true, updated: new Date() })
+  const db = getDb()
+  return db("work_event").where({ id }).update({ deleted: true, updated: new Date().toISOString() })
 }
 
-export async function update(id: string, data: Partial<WorkEvent>) {
-  const result = await db("work_event")
-    .where({ id })
-    .update({
-      ...data,
-      timeframe: data.timeframe ? parseTimeframe(data.timeframe as unknown as string) : null,
-      updated: new Date(),
-    })
-    .returning(["id", "timeframe", "project", "description", "timestamp"])
-  return result && result?.[0]
+export async function update(id: string, data: Partial<WorkEvent>): Promise<string> {
+  const db = getDb()
+  const payload: Record<string, unknown> = { updated: new Date().toISOString() }
+  if (data.timeframe !== undefined) payload.timeframe = data.timeframe
+  if (data.project !== undefined) payload.project = data.project
+  if (data.description !== undefined) payload.description = data.description
+  if (data.timestamp !== undefined) payload.timestamp = data.timestamp
+  if (data.userId !== undefined) payload.user_id = data.userId
+  if (data.channel !== undefined) payload.channel = data.channel
+  await db("work_event").where({ id }).update(payload)
+  return id
 }
