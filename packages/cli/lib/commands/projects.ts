@@ -16,9 +16,13 @@ export const projectsCommand: CommandRegistration = {
           return
         }
 
-        for (const { project } of results) {
-          console.log(project)
-        }
+        const projects: string[] = results
+          .sort((a: { project: string }, b: { project: string }) =>
+            a.project.localeCompare(b.project),
+          )
+          .map((result: { project: string }) => result.project)
+
+        console.log(projects.join("\n"))
       })
   },
 }
