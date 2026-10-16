@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "rootDir": "./lib",
+    "outDir": "./dist",
+    "types": ["node", "jest"],
+    "paths": {
+      "@/*": ["./lib/*"]
+    }
+  },
+  "include": ["lib/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

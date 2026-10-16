@@ -4,9 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Velo is a time tracking CLI tool. It is an npm workspace monorepo with two packages:
-- `packages/core` (`@starktech/core`) — business logic, database, and data layer
+Velo is a time tracking CLI tool. It is an npm workspace monorepo with these packages:
+- `packages/core` (`@starktech/core`) — business logic, database, and data layer (private; bundled into the others)
 - `packages/cli` (`@starktech/velo`) — CLI application using Commander.js
+- `packages/api` (`@starktech/velo-api`) — optional local Express REST API
 
 ## Commands
 
@@ -65,6 +66,15 @@ Single-user. The service layer below is the one API surface the CLI (and later t
 - Tests run the real commands in-process against an in-memory DB (`lib/testing/run.ts`). `commander` is ESM-only, so `jest.config.ts` transforms it.
 - `pg` is an optional dependency, loaded lazily by `import postgres` only.
 - The CLI builds to `dist/main.js` via esbuild (ESM, Node 22 target, `commander` externalized).
+
+### API Package (`packages/api/lib/`)
+
+- **`main.ts`** — `velo-api` bin: `--host`/`--port` override `config.api`; SIGTERM/SIGINT close the server and DB. Exits 1 with a clear message on a bad port or `EADDRINUSE`.
+- **`app.ts`** — `createApp(options)` builds the Express app without listening (this is what tests drive with supertest). **`server.ts`** — `startServer(config)` inits the DB and binds.
+- **Routes** (`routes/`): `GET /api/health` (name, version, pid, db path; used by the CLI to detect the API), `/api/events` (list/create) and `/api/events/:id` (get/PUT/DELETE), `/api/projects`, `/api/stats`, `/api/export.csv`. List/stats/export filters: `term`, `project` (repeatable), `min_date`, `max_date`; list also `page`, `pageSize`. Errors are `{error, issues?}` JSON (zod errors → 400).
+- **No authentication by design**, so `security.ts` guards the browser attack surface: loopback-only `Host` header (anti DNS-rebinding), only the dashboard origin (plus `VELO_ALLOWED_ORIGINS`) may send an `Origin`, and writes require `Content-Type: application/json`. Keep these when adding routes.
+- Express 5: `app.listen`'s callback receives bind errors, so don't ignore its argument. Handlers may be async and throw.
+- Built with esbuild like the CLI; `express`, `knex`, `better-sqlite3` are external runtime dependencies, core and zod are bundled. `__VERSION__` is injected at build time.
 
 ### Key Conventions
 

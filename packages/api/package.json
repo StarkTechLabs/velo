@@ -1,0 +1,39 @@
+{
+  "name": "@starktech/velo-api",
+  "description": "Local REST API for velo time tracking",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "velo-api": "dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "watch": "node esbuild.config.js --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "jest --passWithNoTests"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "express": "^5.3.0",
+    "knex": "^3.3.0"
+  },
+  "devDependencies": {
+    "@starktech/core": "*",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.9",
+    "@types/supertest": "^7.2.1",
+    "esbuild": "^0.28.2",
+    "supertest": "^7.3.1",
+    "typescript": "^5.9.3"
+  }
+}
