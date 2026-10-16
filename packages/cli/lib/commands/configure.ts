@@ -1,25 +1,43 @@
-import { Config } from "@starktech/core"
+import { Config, configSchema, writeConfig } from "@starktech/core"
 import { Command } from "commander"
 
 import { CommandRegistration } from "@/types"
 
 export const configureCommand: CommandRegistration = {
   register(program: Command, config: Config) {
-    // const listCmd = command("list").description("List the current configuration")
     program
       .command("configure")
-      // .addCommand("list", "List the current configuration")
-      // .option("-e, --endpoint <endpoint>", "Set the endpoint for the velo work log webhook")
-      // .option("-a, --apiKey <apiKey>", "Set the API key for the velo endpoint")
-      // .option("-u, --userId <userId>", "Set the user id for current user")
-      .option("-l, --list", "List the current configuration")
       .description("Get/set configuration settings for the velo cli.")
-      .action((options) => {
-        if (options.list) {
-          console.log(config)
-        } else {
-          program.help()
+      .option("-l, --list", "List the current configuration")
+      .option("--api-host <host>", "Address the API binds to (default 127.0.0.1)")
+      .option("--api-port <port>", "Port the API listens on")
+      .option("--dashboard-port <port>", "Port the dashboard listens on")
+      .action((options, command: Command) => {
+        const port = (value: string | undefined) =>
+          value === undefined ? undefined : Number(value) || value // non-numeric input fails validation
+        const updates = {
+          apiHost: options.apiHost,
+          apiPort: port(options.apiPort),
+          dashboardPort: port(options.dashboardPort),
         }
+
+        if (Object.values(updates).every((v) => v === undefined)) {
+          if (options.list) console.log(JSON.stringify(config, null, 2))
+          else command.help()
+          return
+        }
+
+        const next = configSchema.parse({
+          ...config,
+          api: {
+            host: updates.apiHost ?? config.api.host,
+            port: updates.apiPort ?? config.api.port,
+          },
+          dashboard: { port: updates.dashboardPort ?? config.dashboard.port },
+        })
+        writeConfig(next)
+        console.log(JSON.stringify(next, null, 2))
+        console.log("\nRestart running services to apply: velo stop && velo start")
       })
   },
 }

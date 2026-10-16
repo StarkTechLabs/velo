@@ -1,10 +1,10 @@
-import { Config, getDb, setDb } from "@starktech/core"
+import { Config, configSchema } from "@starktech/core"
 import { Command } from "commander"
 
 import { registerCommands } from "@/commands"
 
 /** Runs `velo <args>` in-process against the db set with `setDb`, returning what it printed. */
-export const runCli = async (args: string[]) => {
+export const runCli = async (args: string[], config: Config = configSchema.parse({})) => {
   const out: string[] = []
   const err: string[] = []
   const log = jest.spyOn(console, "log").mockImplementation((...a) => void out.push(a.join(" ")))
@@ -21,7 +21,7 @@ export const runCli = async (args: string[]) => {
     writeOut: (s) => void out.push(s),
     writeErr: (s) => void err.push(s),
   })
-  registerCommands(program, {} as Config)
+  registerCommands(program, config)
 
   let failure: Error | undefined
   try {
@@ -35,5 +35,3 @@ export const runCli = async (args: string[]) => {
   }
   return { out: out.join("\n"), err: err.join("\n"), failure }
 }
-
-export { getDb, setDb }

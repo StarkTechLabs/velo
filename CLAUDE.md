@@ -62,10 +62,21 @@ Single-user. The service layer below is the one API surface the CLI (and later t
 ### CLI Package (`packages/cli/lib/`)
 
 - **`main.ts`** — Commander.js program entry point.
-- **`commands/`** — One file per command: `init`, `configure`, `log`, `list`, `edit`, `rm`, `stats`, `projects`, `export`, `import` (`csv`, `postgres`). `format.ts`/`options.ts`/`prompt.ts` hold shared output, filter flags and confirmation. Commands throw; `main.ts` prints `error: <message>` and exits 1 (`VELO_DEBUG=1` for stack traces). `rm`/`edit` accept the full id or the trailing characters shown in `velo list`.
+- **`commands/`** — One file per command: `init`, `configure` (`--api-host/--api-port/--dashboard-port`), `log`, `list`, `edit`, `rm`, `stats`, `projects`, `export`, `import` (`csv`, `postgres`), and `services.ts`: `status`, `start`, `stop`, `open`, plus `api|dashboard start|stop|restart|status|logs`. `format.ts`/`options.ts`/`prompt.ts` hold shared output, filter flags and confirmation. Commands throw; `main.ts` prints `error: <message>` and exits 1 (`VELO_DEBUG=1` for stack traces). `rm`/`edit` accept the full id or the trailing characters shown in `velo list`.
 - Tests run the real commands in-process against an in-memory DB (`lib/testing/run.ts`). `commander` is ESM-only, so `jest.config.ts` transforms it.
 - `pg` is an optional dependency, loaded lazily by `import postgres` only.
 - The CLI builds to `dist/main.js` via esbuild (ESM, Node 22 target, `commander` externalized).
+
+### Managing the optional services (`packages/cli/lib/services/`)
+
+The CLI never imports `@starktech/velo-api`/`velo-dashboard`; it finds their bins and spawns them.
+- **`definitions.ts`** — per-service host/port/url/args and the identity contract: a running service answers JSON `{name, version, pid}` — the API at `GET /api/health` (`velo-api`), the dashboard at `GET /config.json` (`velo-dashboard`, which also carries its `apiUrl`). The dashboard bin must accept `--port <n> --api-url <url>`; the API bin `--host --port`.
+- **`probe.ts`** — `running` (identity matches) / `down` (ECONNREFUSED) / `foreign` (something else holds the port).
+- **`resolve.ts`** — locates the installed package's bin (via `node_modules` above the CLI, so global siblings and the monorepo both work), else a bin on PATH; otherwise `NotInstalledError` with the `npm install -g` hint.
+- **`manage.ts`** — `startService` (detached `node <bin>`, stdout/stderr to `~/.velo/run/<name>.log`, pid file, waits for the probe to report the spawned pid, surfaces the log tail if it dies or times out), `stopService`, `getStatus`.
+- **Safety rule**: `stopService` only signals the pid the service itself reports from its probe, never one read from a pid file or guessed from a port; a `foreign` port is reported and left alone. Don't weaken this.
+- Pass `env: process.env` explicitly when spawning (jest gives tests a copy of `process.env`).
+- Tests use `testing/fakeService.mjs` + `useFakeServices()` (real detached processes, temp `VELO_HOME`, free ports).
 
 ### API Package (`packages/api/lib/`)
 

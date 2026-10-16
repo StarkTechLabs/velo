@@ -43,7 +43,7 @@ async function main() {
 
 main()
   .then(() => {
-    process.exit(0)
+    process.exit(process.exitCode ?? 0)
   })
   .catch((err) => {
     console.error(process.env.VELO_DEBUG ? err : `error: ${errorMessage(err)}`)

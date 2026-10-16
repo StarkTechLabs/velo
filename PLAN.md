@@ -133,13 +133,14 @@ grouped events table, edit sheet).
    `grouped-events-table`, `edit-resource-sheet`, filters, charts (`recharts`), `export-csv`,
    `filter-storage`, `use-toast`. Remove unused shadcn components (sidebar, drawer, avatar, etc.) after
    checking usage. Replace `zod@3` usage with the repo's zod 4.
-3. API client module; base URL from `/config.json` served alongside the bundle (so the published,
+3. **Contract with the CLI (Phase 4, implemented):** the `velo-dashboard` bin accepts `--port <n>` and `--api-url <url>`, and serves `GET /config.json` returning `{ "name": "velo-dashboard", "version": "...", "pid": <process.pid>, "apiUrl": "<api-url>" }`. The CLI uses that for detection and for stopping it (it signals the reported pid). It binds `127.0.0.1` only.
+4. API client module; base URL from `/config.json` served alongside the bundle (so the published,
    prebuilt SPA can be pointed at any port without rebuilding), with a clear "API not reachable" state
    and retry.
-4. Distribution: publish the **prebuilt** `dist/` plus a tiny static-file server bin
+5. Distribution: publish the **prebuilt** `dist/` plus a tiny static-file server bin
    (`velo-dashboard`) so users don't need Vite at runtime. `vite dev` with proxy is for development
    only.
-5. Move/port the existing component specs (`events-table`, `edit-resource-sheet`) to Vitest + Testing
+6. Move/port the existing component specs (`events-table`, `edit-resource-sheet`) to Vitest + Testing
    Library; visual check against busybee-x side by side (screenshots at desktop and mobile widths).
 
 **Exit:** dashboard visually matches busybee-x and does every operation through the API.
