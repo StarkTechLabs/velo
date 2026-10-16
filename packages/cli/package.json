@@ -17,11 +17,15 @@
   },
   "devDependencies": {
     "@types/node": "^25.3.5",
+    "@types/pg": "^8.23.1",
     "esbuild": "^0.28.2",
     "typescript": "^5.0.0"
   },
   "dependencies": {
     "@starktech/core": "*",
     "commander": "^15.0.0"
+  },
+  "optionalDependencies": {
+    "pg": "^8.23.1"
   }
 }

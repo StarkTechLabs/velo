@@ -8,6 +8,7 @@ import {
 } from "@starktech/core"
 import { Command } from "commander"
 
+import { printJson } from "@/format"
 import { CommandRegistration } from "@/types"
 
 function formatTime(isoString: string): string {
@@ -25,12 +26,15 @@ export const statsCommand: CommandRegistration = {
     stats
       .command("today")
       .description("Show stats for today.")
-      .action(async () => {
+      .option("--json", "Output JSON")
+      .action(async (options) => {
         const range = { minDate: startOfDay(), maxDate: endOfDay() }
         const stats = await getStats(range)
         const {
           data: [last],
         } = await listEvents({ ...range, pageSize: 1 })
+
+        if (options.json) return printJson({ ...stats, last: last ?? null })
 
         const dateLabel = new Date().toLocaleDateString("en-US", {
           weekday: "long",

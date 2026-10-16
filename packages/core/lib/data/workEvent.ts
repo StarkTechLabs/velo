@@ -1,8 +1,8 @@
 import { Knex } from "knex"
 
-import { getDb } from "@/common/db"
-import { parseTimeframe } from "@/common/utils"
-import { uuidv7 } from "@/common/uuid"
+import { getDb } from "../common/db"
+import { parseTimeframe } from "../common/utils"
+import { uuidv7 } from "../common/uuid"
 import {
   CreateEvent,
   EventFilter,
@@ -14,7 +14,7 @@ import {
   eventFilterSchema,
   listEventsSchema,
   updateEventSchema,
-} from "@/types"
+} from "../types"
 
 const TABLE = "work_event"
 const COLUMNS = [
@@ -64,6 +64,36 @@ export async function listEvents(input: ListEventsQuery = {}): Promise<Page<Work
 export async function getEvent(id: string): Promise<WorkEvent | null> {
   const row = await getDb()(TABLE).select(COLUMNS).where({ id, deleted: false }).first()
   return row ?? null
+}
+
+/** Every event matching the filter, newest first (pages through `listEvents`). */
+export async function listAllEvents(filter: EventFilter = {}): Promise<WorkEvent[]> {
+  const events: WorkEvent[] = []
+  for (let page = 1; ; page++) {
+    const result = await listEvents({ ...filter, page, pageSize: 1000 })
+    events.push(...result.data)
+    if (events.length >= result.total || result.data.length === 0) return events
+  }
+}
+
+/**
+ * Resolves a full id, or the trailing characters of one (as shown by `velo list`), to an id.
+ * Throws when nothing or more than one event matches.
+ */
+export async function resolveEventId(ref: string): Promise<string> {
+  if (!/^[0-9a-zA-Z_-]{4,}$/.test(ref)) {
+    throw new Error(`Invalid event id "${ref}"`)
+  }
+  const rows: { id: string }[] = await getDb()(TABLE)
+    .where("deleted", false)
+    .andWhere((q) => q.where("id", ref).orWhereRaw("id like ?", [`%${ref}`]))
+    .select("id")
+    .limit(2)
+  const exact = rows.find((r) => r.id === ref)
+  if (exact) return exact.id
+  if (rows.length === 0) throw new Error(`No event found matching "${ref}"`)
+  if (rows.length > 1) throw new Error(`"${ref}" matches more than one event; use more characters`)
+  return rows[0].id
 }
 
 export async function listProjects(): Promise<string[]> {

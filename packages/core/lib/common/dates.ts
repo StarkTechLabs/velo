@@ -32,3 +32,18 @@ export const endOfDay = (date: Date = new Date()): Date => {
   d.setHours(23, 59, 59, 999)
   return d
 }
+
+/**
+ * Parses user date input: `YYYY-MM-DD` (local day; `end` gives 23:59:59.999) or any
+ * string `new Date()` understands, such as a full ISO timestamp.
+ */
+export const parseDateInput = (value: string, edge: "start" | "end" = "start"): Date => {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  const date = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid date "${value}". Use YYYY-MM-DD or an ISO timestamp.`)
+  }
+  return dateOnly && edge === "end" ? endOfDay(date) : date
+}

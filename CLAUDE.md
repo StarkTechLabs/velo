@@ -44,7 +44,7 @@ npm run lint:fix
 
 ### Core Package (`packages/core/lib/`)
 
-Single-user. The service layer below is the one API surface the CLI (and later the API package) calls.
+Single-user. The service layer below is the one API surface the CLI (and later the API package) calls. Core uses relative imports (no `@/` alias) so other packages can consume it.
 
 - **`types.ts`** — Zod schemas (`createEventSchema`, `updateEventSchema`, `listEventsSchema`, `timeframeSchema`) and types (`WorkEvent`, `Stats`, `GroupedEvent`, `Page`). Timeframe format is `<number><unit>` (e.g., `30m`, `1.5h`, `2d`); `minutes` is stored on each event for SQL aggregation.
 - **`common/config.ts`** — Config at `~/.velo/config.json` (override the directory with `VELO_HOME`), validated with zod and merged with defaults: `databaseFilePath`, `api: {host, port}`, `dashboard: {port}`. Also `getRunPath()` (`~/.velo/run`) for pid files/logs.
@@ -52,6 +52,7 @@ Single-user. The service layer below is the one API surface the CLI (and later t
 - **`migrations/`** — Embedded knex migrations (no migration files on disk). Add new ones to `MIGRATIONS` + `MIGRATION_MAP`.
 - **`data/workEvent.ts`** — `createEvent`, `getEvent`, `listEvents` (term/project/date filters, pagination), `updateEvent`, `deleteEvent` (soft delete), `listProjects`. Inputs are validated by the zod schemas, so callers may pass raw input.
 - **`data/stats.ts`** — `getStats(filter)`: totals, by project, by local day.
+- **`data/import.ts`, `import/`** — `importEvents` (bulk, idempotent by id, dry-run), `csvToEvents` (velo/busybee-x export and legacy Busywork log formats; content-derived ids), `busybeeRowToEvent`.
 - **`common/group.ts`** — Pure helpers `groupEvents` and `eventsToCsv` (no node imports, safe for the browser).
 - **`common/utils.ts`, `dates.ts`, `uuid.ts`, `errors.ts`** — Timeframe parsing/formatting, date helpers, UUID v7 (`crypto`-based, no dependency), `errorMessage`.
 - **`testing/memoryDb.ts`** — In-memory migrated SQLite for specs.
@@ -60,7 +61,9 @@ Single-user. The service layer below is the one API surface the CLI (and later t
 ### CLI Package (`packages/cli/lib/`)
 
 - **`main.ts`** — Commander.js program entry point.
-- **`commands/`** — One file per command: `init`, `log`, `configure`.
+- **`commands/`** — One file per command: `init`, `configure`, `log`, `list`, `edit`, `rm`, `stats`, `projects`, `export`, `import` (`csv`, `postgres`). `format.ts`/`options.ts`/`prompt.ts` hold shared output, filter flags and confirmation. Commands throw; `main.ts` prints `error: <message>` and exits 1 (`VELO_DEBUG=1` for stack traces). `rm`/`edit` accept the full id or the trailing characters shown in `velo list`.
+- Tests run the real commands in-process against an in-memory DB (`lib/testing/run.ts`). `commander` is ESM-only, so `jest.config.ts` transforms it.
+- `pg` is an optional dependency, loaded lazily by `import postgres` only.
 - The CLI builds to `dist/main.js` via esbuild (ESM, Node 22 target, `commander` externalized).
 
 ### Key Conventions

@@ -1,6 +1,7 @@
-import { Config, createEvent, errorMessage } from "@starktech/core"
+import { Config, createEvent } from "@starktech/core"
 import { Command } from "commander"
 
+import { printJson } from "@/format"
 import { CommandRegistration } from "@/types"
 
 export const logCommand: CommandRegistration = {
@@ -12,6 +13,7 @@ export const logCommand: CommandRegistration = {
         "--timestamp <iso_timestamp>",
         "Save log with given timestamp. If not provided, it will default to `now`",
       )
+      .option("--json", "Output JSON")
       .addHelpText("after", "\n")
       .addHelpText(
         "after",
@@ -23,18 +25,14 @@ export const logCommand: CommandRegistration = {
       )
       .addHelpText("after", "<event> is the description or task that was worked on.")
       .action(async (project: string, timeframe: string, event: string, options) => {
-        let workEvent
-        try {
-          workEvent = await createEvent({
-            project,
-            timeframe,
-            description: event,
-            timestamp: options.timestamp,
-          })
-        } catch (err) {
-          program.error(errorMessage(err))
-        }
+        const workEvent = await createEvent({
+          project,
+          timeframe,
+          description: event,
+          timestamp: options.timestamp,
+        })
 
+        if (options.json) return printJson(workEvent)
         console.log(`Logged`)
         console.log(`  Project   : ${workEvent.project}`)
         console.log(`  Timeframe : ${workEvent.timeframe}`)

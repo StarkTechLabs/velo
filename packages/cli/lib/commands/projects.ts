@@ -1,6 +1,7 @@
 import { Config, listProjects } from "@starktech/core"
 import { Command } from "commander"
 
+import { printJson } from "@/format"
 import { CommandRegistration } from "@/types"
 
 export const projectsCommand: CommandRegistration = {
@@ -8,8 +9,10 @@ export const projectsCommand: CommandRegistration = {
     program
       .command("projects")
       .description("List all projects with logged time.")
-      .action(async () => {
+      .option("--json", "Output JSON")
+      .action(async (options) => {
         const projects = await listProjects()
+        if (options.json) return printJson(projects)
         console.log(projects.length === 0 ? "No projects found." : projects.join("\n"))
       })
   },

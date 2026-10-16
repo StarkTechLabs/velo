@@ -1,6 +1,6 @@
 import knex, { Knex } from "knex"
 
-import { EmbeddedMigrationSource } from "@/migrations"
+import { EmbeddedMigrationSource } from "../migrations"
 
 export const createMemoryDb = (): Knex =>
   knex({

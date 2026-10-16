@@ -16,6 +16,7 @@ export const timeframeSchema = z
   .regex(/^(\d+(?:\.\d+)?)([hdm])$/, {
     message:
       "Invalid timeframe format. Expected format: <number><unit> where unit is m(minute), h(hour), or d(day)",
+    abort: true, // don't run the refine below on input parseTimeframe can't read
   })
   .refine((value) => parseTimeframe(value).durationInMinutes > 0, {
     message: "Timeframe must be greater than zero",

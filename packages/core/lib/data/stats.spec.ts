@@ -1,7 +1,7 @@
-import { getDb, setDb } from "@/common/db"
-import { getStats } from "@/data/stats"
-import { createEvent } from "@/data/workEvent"
-import { migratedMemoryDb } from "@/testing/memoryDb"
+import { getDb, setDb } from "../common/db"
+import { getStats } from "./stats"
+import { createEvent } from "./workEvent"
+import { migratedMemoryDb } from "../testing/memoryDb"
 
 beforeAll(async () => {
   setDb(await migratedMemoryDb())

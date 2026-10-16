@@ -6,7 +6,8 @@
     "rootDir": "./lib",
     "outDir": "./dist",
     "types": [
-      "node"
+      "node",
+      "jest"
     ],
     "paths": {
       "@/*": [

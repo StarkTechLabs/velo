@@ -2,8 +2,8 @@ import * as fs from "fs"
 import * as path from "path"
 import knex, { Knex } from "knex"
 
-import { Config } from "@/common/config"
-import { EmbeddedMigrationSource } from "@/migrations"
+import { Config } from "./config"
+import { EmbeddedMigrationSource } from "../migrations"
 
 let _db: Knex | null = null
 

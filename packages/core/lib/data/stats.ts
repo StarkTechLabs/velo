@@ -1,5 +1,5 @@
-import { getDb } from "@/common/db"
-import { EventFilter, DayStat, ProjectStat, Stats } from "@/types"
+import { getDb } from "../common/db"
+import { EventFilter, DayStat, ProjectStat, Stats } from "../types"
 
 import { filteredQuery } from "./workEvent"
 

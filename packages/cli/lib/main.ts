@@ -4,7 +4,7 @@ import * as path from "path"
 import { fileURLToPath } from "url"
 
 import { registerCommands } from "@/commands"
-import { ensureConfig, initDb } from "@starktech/core"
+import { closeDb, ensureConfig, errorMessage, initDb } from "@starktech/core"
 
 // ES modules equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url)
@@ -34,7 +34,11 @@ async function main() {
 
   registerCommands(program, config)
 
-  await program.parseAsync()
+  try {
+    await program.parseAsync()
+  } finally {
+    await closeDb()
+  }
 }
 
 main()
@@ -42,6 +46,6 @@ main()
     process.exit(0)
   })
   .catch((err) => {
-    console.error(err)
+    console.error(process.env.VELO_DEBUG ? err : `error: ${errorMessage(err)}`)
     process.exit(1)
   })

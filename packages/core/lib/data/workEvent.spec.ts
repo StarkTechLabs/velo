@@ -1,13 +1,17 @@
-import { getDb, setDb } from "@/common/db"
+import { ZodError } from "zod"
+
+import { getDb, setDb } from "../common/db"
 import {
   createEvent,
   deleteEvent,
   getEvent,
+  listAllEvents,
+  resolveEventId,
   listEvents,
   listProjects,
   updateEvent,
-} from "@/data/workEvent"
-import { migratedMemoryDb } from "@/testing/memoryDb"
+} from "./workEvent"
+import { migratedMemoryDb } from "../testing/memoryDb"
 
 beforeAll(async () => {
   setDb(await migratedMemoryDb())
@@ -55,6 +59,10 @@ describe("createEvent", () => {
 
   it.each(["", "abc", "1x", "0h", "-1h"])("rejects timeframe %p", async (timeframe) => {
     await expect(createEvent({ ...base, timeframe })).rejects.toThrow()
+  })
+
+  it("fails validation (not a raw error) for an unparseable timeframe", async () => {
+    await expect(createEvent({ ...base, timeframe: "abc" })).rejects.toBeInstanceOf(ZodError)
   })
 
   it("rejects an empty project and a bad timestamp", async () => {
@@ -193,5 +201,51 @@ describe("deleteEvent", () => {
     const event = await createEvent(base)
     await deleteEvent(event.id)
     expect(await deleteEvent(event.id)).toBe(false)
+  })
+})
+
+describe("listAllEvents", () => {
+  it("pages through every matching event", async () => {
+    const rows = Array.from({ length: 1005 }, (_, i) => ({
+      id: `id-${String(i).padStart(5, "0")}`,
+      timestamp: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+      timeframe: "1m",
+      minutes: 1,
+      project: i % 2 ? "odd" : "even",
+      description: "",
+      created: "",
+      updated: "",
+      deleted: false,
+    }))
+    for (let i = 0; i < rows.length; i += 100)
+      await getDb()("work_event").insert(rows.slice(i, i + 100))
+
+    expect(await listAllEvents()).toHaveLength(1005)
+    expect(await listAllEvents({ projects: ["odd"] })).toHaveLength(502)
+  })
+})
+
+describe("resolveEventId", () => {
+  it("resolves exact ids and unique suffixes", async () => {
+    const event = await createEvent({ ...base, id: "aaaa-1111-bbbb" })
+    expect(await resolveEventId("aaaa-1111-bbbb")).toBe(event.id)
+    expect(await resolveEventId("1111-bbbb")).toBe(event.id)
+  })
+
+  it("prefers an exact match over longer suffix matches", async () => {
+    await createEvent({ ...base, id: "xxxx-abcd" })
+    await createEvent({ ...base, id: "abcd" })
+    expect(await resolveEventId("abcd")).toBe("abcd")
+  })
+
+  it("throws for missing, ambiguous, deleted and invalid refs", async () => {
+    await createEvent({ ...base, id: "one-9999" })
+    await createEvent({ ...base, id: "two-9999" })
+    await expect(resolveEventId("9999")).rejects.toThrow("more than one")
+    await expect(resolveEventId("nope1")).rejects.toThrow("No event found")
+    await expect(resolveEventId("ab")).rejects.toThrow("Invalid event id")
+    await expect(resolveEventId("a%b%c")).rejects.toThrow("Invalid event id")
+    await deleteEvent("one-9999")
+    expect(await resolveEventId("9999")).toBe("two-9999")
   })
 })

@@ -1,5 +1,5 @@
 import { EmbeddedMigrationSource } from "."
-import { createMemoryDb } from "@/testing/memoryDb"
+import { createMemoryDb } from "../testing/memoryDb"
 
 describe("migration 002_single_user_minutes", () => {
   it("upgrades existing rows, computing minutes and dropping user columns", async () => {
