@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. For running things locally see `docs/development.md`; **always use a sandboxed `VELO_HOME` (`. scripts/dev-env.sh`) when running the CLI, API or dashboard from this repo** — builds here run migrations on whatever database they open.
 
 ## Project Overview
 
@@ -8,12 +8,16 @@ Velo is a time tracking CLI tool. It is an npm workspace monorepo with these pac
 - `packages/core` (`@starktech/core`) — business logic, database, and data layer (private; bundled into the others)
 - `packages/cli` (`@starktech/velo`) — CLI application using Commander.js
 - `packages/api` (`@starktech/velo-api`) — optional local Express REST API
+- `packages/dashboard` (`@starktech/velo-dashboard`) — optional React + Vite single-page app and its tiny static server
 
 ## Commands
 
 ```bash
 # Install dependencies
 npm install
+
+# Work on a checkout without touching ~/.velo (sets VELO_HOME, defines a `velo` function)
+. scripts/dev-env.sh
 
 # Build all packages
 npm run build
@@ -86,6 +90,16 @@ The CLI never imports `@starktech/velo-api`/`velo-dashboard`; it finds their bin
 - **No authentication by design**, so `security.ts` guards the browser attack surface: loopback-only `Host` header (anti DNS-rebinding), only the dashboard origin (plus `VELO_ALLOWED_ORIGINS`) may send an `Origin`, and writes require `Content-Type: application/json`. Keep these when adding routes.
 - Express 5: `app.listen`'s callback receives bind errors, so don't ignore its argument. Handlers may be async and throw.
 - Built with esbuild like the CLI; `express`, `knex`, `better-sqlite3` are external runtime dependencies, core and zod are bundled. `__VERSION__` is injected at build time.
+
+### Dashboard Package (`packages/dashboard/`)
+
+A port of the busybee-x ("chrono") UI; it must keep looking the same. Tailwind v4 + shadcn/Radix + Recharts + react-hook-form, Vitest + Testing Library.
+- **Do not "fix" the shadcn tokens.** `src/index.css` is copied from busybee-x and defines only `background/foreground/primary/secondary`; the components rely on `bg-input`, `bg-card` etc. being *undefined* (it's what makes the original look the way it does), and the app deliberately does not import an animation plugin. Adding the usual shadcn theme variables or `tw-animate-css` changes the look. Body keeps `antialiased`; the font is Arial.
+- **Layout**: `src/App.tsx` (page), `src/components/` (ported components; `ui/` is shadcn), `src/lib/api.ts` (the only place that calls `fetch`; `ApiError.status === 0` means the API is unreachable), `src/lib/config.ts` (reads `/config.json` for `apiUrl`), `src/lib/date-ranges.ts` (date-filter ranges and the 14-day pay periods anchored on 2025-08-02, calendar arithmetic so DST-safe).
+- **Core is shared via `@starktech/core/browser`** (types, `groupEvents`, timeframe helpers, `formatDateTime`). That entry must stay free of node/db/zod runtime imports; `core/lib/browser.spec.ts` enforces it. Events carry `timeframe` (string, e.g. `1.5h`) and `minutes` (number).
+- **Server** (`server/`): `velo-dashboard --port <n> --api-url <url>` serves `dist/app` on 127.0.0.1 and `GET /config.json` → `{name:"velo-dashboard", version, pid, apiUrl}` (what the CLI probes). `npm run build` = `vite build` (to `dist/app`) then esbuild (to `dist/main.js`).
+- **Dev**: run the API (`velo api start`), then `npm run dev -w @starktech/velo-dashboard` (Vite on :5173). `/api` is proxied to `VELO_API_URL` (default `http://127.0.0.1:4317`); the proxy strips `Origin` because the API only accepts browser origins from the dashboard's configured port.
+- **Parity check**: when changing UI, compare against the original by running busybee-x against a Postgres with the same data and pixel-diffing screenshots of both (Phase 5 got desktop within ~0.1%).
 
 ### Key Conventions
 

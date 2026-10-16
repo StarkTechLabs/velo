@@ -1,4 +1,4 @@
-import { GroupedEvent, WorkEvent } from "../types"
+import type { GroupedEvent, WorkEvent } from "../types"
 import { localDateKey } from "./dates"
 
 /** Groups events that share a local date, project and description. Newest group first. */

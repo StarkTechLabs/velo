@@ -38,3 +38,6 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# local development sandbox (see docs/development.md)
+.velo-dev/

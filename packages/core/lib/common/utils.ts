@@ -1,4 +1,4 @@
-import { TimeframeData } from "../types"
+import type { TimeframeData } from "../types"
 
 export const parseTimeframe = (timeframe: string): TimeframeData => {
   // Parse timeframe (e.g., "1h", "30m", "2d", "1.5h", "0.5d")
