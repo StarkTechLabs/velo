@@ -48,7 +48,7 @@ export const logCommand: CommandRegistration = {
           userId: options.user || config.defaultUserId,
         }
 
-        const id = await insert(workEvent)
+        await insert(workEvent)
         console.log(`Logged`)
         console.log(`  Project   : ${workEvent.project}`)
         console.log(`  Timeframe : ${workEvent.timeframe}`)

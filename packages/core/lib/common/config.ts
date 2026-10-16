@@ -1,7 +1,8 @@
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
-import * as uuid from "uuid"
+
+import { NIL_UUID } from "./uuid"
 
 const CONFIG_DIRECTORY = ".velo"
 const DEFAULT_SERVER_PORT = 68586
@@ -63,7 +64,7 @@ export const ensureConfig = (): Config => {
   let config = getConfig()
   if (!config) {
     config = {
-      defaultUserId: uuid.NIL,
+      defaultUserId: NIL_UUID,
       databaseFilePath: path.join(getConfigPath(), USER_DB_FILENAME),
       server: {
         port: DEFAULT_SERVER_PORT,

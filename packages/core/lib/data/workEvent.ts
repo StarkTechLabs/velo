@@ -1,4 +1,4 @@
-import { v7 } from "uuid"
+import { uuidv7 } from "@/common/uuid"
 
 import { getDb } from "@/common/db"
 import { WorkEvent } from "@/types"
@@ -95,7 +95,7 @@ export async function fetchPaginated({
 
 export async function insert(data: WorkEvent): Promise<string> {
   const db = getDb()
-  const id = data.id || v7()
+  const id = data.id || uuidv7()
   await db("work_event").insert({
     id,
     timeframe: data.timeframe,

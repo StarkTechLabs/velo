@@ -64,11 +64,16 @@ export const statsCommand: CommandRegistration = {
         for (const event of data) {
           const parsed = parseTimeframe(event.timeframe)
           totalMinutes += parsed.durationInMinutes
-          byProject.set(event.project, (byProject.get(event.project) ?? 0) + parsed.durationInMinutes)
+          byProject.set(
+            event.project,
+            (byProject.get(event.project) ?? 0) + parsed.durationInMinutes,
+          )
         }
 
         const eventWord = data.length === 1 ? "event" : "events"
-        console.log(`Total     ${formatMinutesToTimeframeString(totalMinutes)}  (${data.length} ${eventWord})`)
+        console.log(
+          `Total     ${formatMinutesToTimeframeString(totalMinutes)}  (${data.length} ${eventWord})`,
+        )
 
         // By project, sorted by most time first
         console.log("\nBy Project:")
