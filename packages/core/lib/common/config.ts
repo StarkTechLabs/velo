@@ -1,75 +1,76 @@
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
-
-import { NIL_UUID } from "./uuid"
+import { z } from "zod"
 
 const CONFIG_DIRECTORY = ".velo"
-const DEFAULT_SERVER_PORT = 68586
 const USER_DB_FILENAME = "userDb.sqlite"
 
-export type Config = {
-  defaultUserId: string
-  server: ServerConfig
-  databaseFilePath: string
-}
+export const DEFAULT_API_PORT = 4317
+export const DEFAULT_DASHBOARD_PORT = 4318
 
-export type ServerConfig = {
-  port: number
-}
+const port = z.number().int().min(1).max(65535)
 
+export const configSchema = z.object({
+  databaseFilePath: z
+    .string()
+    .min(1)
+    .default(() => defaultDatabasePath()),
+  api: z
+    .object({ host: z.string().min(1).default("127.0.0.1"), port: port.default(DEFAULT_API_PORT) })
+    .default({ host: "127.0.0.1", port: DEFAULT_API_PORT }),
+  dashboard: z
+    .object({ port: port.default(DEFAULT_DASHBOARD_PORT) })
+    .default({ port: DEFAULT_DASHBOARD_PORT }),
+})
+
+export type Config = z.infer<typeof configSchema>
+
+/** `~/.velo`, or `$VELO_HOME` when set. */
 export const getConfigPath = () => {
-  return path.join(os.homedir(), CONFIG_DIRECTORY)
+  return process.env.VELO_HOME || path.join(os.homedir(), CONFIG_DIRECTORY)
 }
 
 export const getConfigJsonPath = () => {
   return path.join(getConfigPath(), "config.json")
 }
 
+/** Directory for pid files and logs of the optional api/dashboard processes. */
+export const getRunPath = () => {
+  return path.join(getConfigPath(), "run")
+}
+
+const defaultDatabasePath = () => path.join(getConfigPath(), USER_DB_FILENAME)
+
+/** Returns the config merged with defaults, or null when none has been written yet. */
 export const getConfig = (): Config | null => {
   const configPath = getConfigJsonPath()
   if (!fs.existsSync(configPath)) {
     return null
   }
-  const config = JSON.parse(fs.readFileSync(configPath, "utf8"))
-
-  return config
+  let raw: unknown
+  try {
+    raw = JSON.parse(fs.readFileSync(configPath, "utf8"))
+  } catch (err) {
+    throw new Error(`Could not read ${configPath}: ${(err as Error).message}`, { cause: err })
+  }
+  const result = configSchema.safeParse(raw)
+  if (!result.success) {
+    const issues = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ")
+    throw new Error(`Invalid config at ${configPath}: ${issues}`)
+  }
+  return result.data
 }
 
 export const writeConfig = (config: Config) => {
-  const dirPath = getConfigPath()
-  if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath)
-  }
-  const configPath = getConfigJsonPath()
-  fs.writeFileSync(configPath, JSON.stringify(config))
-}
-
-export const validateConfig = (config: Config) => {
-  if (!config) {
-    console.error("No config found!")
-    console.error("Please run `velo init` to create a config file")
-    return false
-  }
-  if (!config.defaultUserId) {
-    console.error("No default user id found!")
-    console.error("Please run `velo init to create a config file")
-    return false
-  }
-
-  return true
+  fs.mkdirSync(getConfigPath(), { recursive: true })
+  fs.writeFileSync(getConfigJsonPath(), JSON.stringify(config, null, 2) + "\n")
 }
 
 export const ensureConfig = (): Config => {
   let config = getConfig()
   if (!config) {
-    config = {
-      defaultUserId: NIL_UUID,
-      databaseFilePath: path.join(getConfigPath(), USER_DB_FILENAME),
-      server: {
-        port: DEFAULT_SERVER_PORT,
-      },
-    }
+    config = configSchema.parse({})
     writeConfig(config)
   }
   return config

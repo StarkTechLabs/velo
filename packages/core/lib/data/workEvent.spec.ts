@@ -1,17 +1,16 @@
-import knex from "knex"
-
-import { EmbeddedMigrationSource } from "@/migrations"
 import { getDb, setDb } from "@/common/db"
-import { insert, fetchPaginated, fetchProjects, remove, update } from "@/data/workEvent"
+import {
+  createEvent,
+  deleteEvent,
+  getEvent,
+  listEvents,
+  listProjects,
+  updateEvent,
+} from "@/data/workEvent"
+import { migratedMemoryDb } from "@/testing/memoryDb"
 
 beforeAll(async () => {
-  const db = knex({
-    client: "better-sqlite3",
-    connection: { filename: ":memory:" },
-    useNullAsDefault: true,
-  })
-  await db.migrate.latest({ migrationSource: new EmbeddedMigrationSource() })
-  setDb(db)
+  setDb(await migratedMemoryDb())
 })
 
 afterAll(async () => {
@@ -22,177 +21,177 @@ beforeEach(async () => {
   await getDb()("work_event").delete()
 })
 
-const baseEvent = {
+const base = {
   project: "test-project",
   timeframe: "1h",
   description: "did some work",
   timestamp: "2026-01-15T10:00:00.000Z",
-  created: "2026-01-15T10:00:00.000Z",
-  updated: "2026-01-15T10:00:00.000Z",
-  channel: null,
-  userId: "user-1",
 }
 
-describe("insert", () => {
-  it("returns an id string", async () => {
-    const id = await insert(baseEvent)
-    expect(typeof id).toBe("string")
-    expect(id.length).toBeGreaterThan(0)
+describe("createEvent", () => {
+  it("returns the stored event with minutes computed", async () => {
+    const event = await createEvent({ ...base, timeframe: "1.5h" })
+    expect(event).toMatchObject({ ...base, timeframe: "1.5h", minutes: 90 })
+    expect(event.id.length).toBeGreaterThan(0)
+    expect(event.created).toBe(event.updated)
   })
 
-  it("stores timeframe as a string", async () => {
-    const id = await insert(baseEvent)
-    const row = await getDb()("work_event").where({ id }).first()
-    expect(row.timeframe).toBe("1h")
+  it("defaults timestamp to now and description to empty", async () => {
+    const before = Date.now()
+    const event = await createEvent({ project: "p", timeframe: "30m" })
+    expect(event.description).toBe("")
+    expect(new Date(event.timestamp).getTime()).toBeGreaterThanOrEqual(before)
   })
 
-  it("stores meta as a JSON string", async () => {
-    const id = await insert(baseEvent)
-    const row = await getDb()("work_event").where({ id }).first()
-    expect(typeof row.meta).toBe("string")
-    expect(() => JSON.parse(row.meta)).not.toThrow()
+  it("normalizes timestamps to UTC ISO", async () => {
+    const event = await createEvent({ ...base, timestamp: "2026-01-15T05:00:00-05:00" })
+    expect(event.timestamp).toBe("2026-01-15T10:00:00.000Z")
   })
 
-  it("uses provided id if given", async () => {
-    const id = await insert({ ...baseEvent, id: "custom-id-123" })
-    expect(id).toBe("custom-id-123")
-    const row = await getDb()("work_event").where({ id: "custom-id-123" }).first()
-    expect(row).toBeDefined()
+  it("uses a provided id", async () => {
+    const event = await createEvent({ ...base, id: "custom-id" })
+    expect(event.id).toBe("custom-id")
+  })
+
+  it.each(["", "abc", "1x", "0h", "-1h"])("rejects timeframe %p", async (timeframe) => {
+    await expect(createEvent({ ...base, timeframe })).rejects.toThrow()
+  })
+
+  it("rejects an empty project and a bad timestamp", async () => {
+    await expect(createEvent({ ...base, project: "  " })).rejects.toThrow("Project is required")
+    await expect(createEvent({ ...base, timestamp: "nope" })).rejects.toThrow("Invalid timestamp")
   })
 })
 
-describe("fetchPaginated", () => {
+describe("listEvents", () => {
   beforeEach(async () => {
-    await insert({ ...baseEvent, project: "alpha", description: "wrote tests", userId: "user-1" })
-    await insert({ ...baseEvent, project: "beta", description: "fixed bug", userId: "user-1" })
-    await insert({ ...baseEvent, project: "alpha", description: "reviewed PR", userId: "user-1" })
-    await insert({ ...baseEvent, project: "gamma", description: "deploy", userId: "user-2" })
+    await createEvent({ ...base, project: "alpha", description: "wrote tests" })
+    await createEvent({ ...base, project: "beta", description: "fixed bug" })
+    await createEvent({ ...base, project: "alpha", description: "reviewed PR" })
   })
 
-  it("returns all events for a user", async () => {
-    const { data, total } = await fetchPaginated({ userId: "user-1" })
-    expect(total).toBe(3)
-    expect(data).toHaveLength(3)
+  it("returns all events with paging info", async () => {
+    const result = await listEvents()
+    expect(result).toMatchObject({ total: 3, page: 1, pageSize: 20 })
+    expect(result.data).toHaveLength(3)
   })
 
-  it("filters by search term (project)", async () => {
-    const { data, total } = await fetchPaginated({ userId: "user-1", term: "alpha" })
-    expect(total).toBe(2)
-    expect(data.every((e) => e.project === "alpha")).toBe(true)
-  })
-
-  it("filters by search term (description)", async () => {
-    const { data, total } = await fetchPaginated({ userId: "user-1", term: "bug" })
-    expect(total).toBe(1)
-    expect(data[0].project).toBe("beta")
+  it("filters by term in project or description, case-insensitively", async () => {
+    expect((await listEvents({ term: "ALPHA" })).total).toBe(2)
+    const bug = await listEvents({ term: "bug" })
+    expect(bug.data.map((e) => e.project)).toEqual(["beta"])
   })
 
   it("filters by project list", async () => {
-    const { data, total } = await fetchPaginated({ userId: "user-1", projects: ["beta"] })
-    expect(total).toBe(1)
-    expect(data[0].project).toBe("beta")
+    expect((await listEvents({ projects: ["beta"] })).total).toBe(1)
   })
 
-  it("paginates results", async () => {
-    const { data, total } = await fetchPaginated({ userId: "user-1", page: 1, pageSize: 2 })
-    expect(total).toBe(3)
-    expect(data).toHaveLength(2)
+  it("filters by date range", async () => {
+    await createEvent({ ...base, timestamp: "2026-02-01T10:00:00.000Z" })
+    const result = await listEvents({
+      minDate: "2026-02-01T00:00:00.000Z" as unknown as Date,
+      maxDate: new Date("2026-02-02T00:00:00.000Z"),
+    })
+    expect(result.total).toBe(1)
   })
 
-  it("excludes deleted events", async () => {
-    const id = await insert({ ...baseEvent, project: "deleted-project", userId: "user-1" })
-    await remove(id)
-    const { total } = await fetchPaginated({ userId: "user-1" })
-    expect(total).toBe(3)
+  it("paginates and reports the full total", async () => {
+    const result = await listEvents({ page: 2, pageSize: 2 })
+    expect(result.total).toBe(3)
+    expect(result.data).toHaveLength(1)
   })
 
-  it("isolates by userId", async () => {
-    const { data, total } = await fetchPaginated({ userId: "user-2" })
-    expect(total).toBe(1)
-    expect(data[0].project).toBe("gamma")
-  })
-})
-
-describe("fetchProjects", () => {
-  beforeEach(async () => {
-    await insert({ ...baseEvent, project: "zebra", userId: "user-1" })
-    await insert({ ...baseEvent, project: "apple", userId: "user-1" })
-    await insert({ ...baseEvent, project: "apple", userId: "user-1" })
-    await insert({ ...baseEvent, project: "mango", userId: "user-2" })
-  })
-
-  it("returns distinct projects sorted ascending", async () => {
-    const results = await fetchProjects({ userId: "user-1" })
-    const names = results.map((r) => r.project)
-    expect(names).toEqual(["apple", "zebra"])
+  it("orders newest first", async () => {
+    await createEvent({ ...base, project: "newest", timestamp: "2026-03-01T00:00:00.000Z" })
+    expect((await listEvents()).data[0].project).toBe("newest")
   })
 
   it("excludes deleted events", async () => {
-    const id = await insert({ ...baseEvent, project: "gone", userId: "user-1" })
-    await remove(id)
-    const results = await fetchProjects({ userId: "user-1" })
-    const names = results.map((r) => r.project)
-    expect(names).not.toContain("gone")
+    const event = await createEvent({ ...base, project: "gone" })
+    await deleteEvent(event.id)
+    expect((await listEvents()).total).toBe(3)
   })
 
-  it("isolates by userId", async () => {
-    const results = await fetchProjects({ userId: "user-2" })
-    const names = results.map((r) => r.project)
-    expect(names).toEqual(["mango"])
+  it("rejects an invalid page size", async () => {
+    await expect(listEvents({ pageSize: 0 })).rejects.toThrow()
   })
 })
 
-describe("remove", () => {
-  it("soft-deletes an event", async () => {
-    const id = await insert(baseEvent)
-    await remove(id)
-    const row = await getDb()("work_event").where({ id }).first()
-    expect(row.deleted).toBe(1) // SQLite stores booleans as integers
-  })
-
-  it("does not physically delete the row", async () => {
-    const id = await insert(baseEvent)
-    await remove(id)
-    const row = await getDb()("work_event").where({ id }).first()
-    expect(row).toBeDefined()
+describe("getEvent", () => {
+  it("returns the event, or null when missing or deleted", async () => {
+    const event = await createEvent(base)
+    expect(await getEvent(event.id)).toEqual(event)
+    expect(await getEvent("missing")).toBeNull()
+    await deleteEvent(event.id)
+    expect(await getEvent(event.id)).toBeNull()
   })
 })
 
-describe("update", () => {
-  it("returns the id", async () => {
-    const id = await insert(baseEvent)
-    const result = await update(id, { description: "updated description" })
-    expect(result).toBe(id)
+describe("listProjects", () => {
+  it("returns distinct, case-insensitively sorted, non-deleted projects", async () => {
+    await createEvent({ ...base, project: "zebra" })
+    await createEvent({ ...base, project: "Apple" })
+    await createEvent({ ...base, project: "apple2" })
+    await createEvent({ ...base, project: "Apple" })
+    const gone = await createEvent({ ...base, project: "gone" })
+    await deleteEvent(gone.id)
+    expect(await listProjects()).toEqual(["Apple", "apple2", "zebra"])
+  })
+})
+
+describe("updateEvent", () => {
+  it("updates only the given fields and returns the event", async () => {
+    const event = await createEvent(base)
+    const updated = await updateEvent(event.id, { description: "new", project: "other" })
+    expect(updated).toMatchObject({
+      id: event.id,
+      description: "new",
+      project: "other",
+      timeframe: "1h",
+      minutes: 60,
+      created: event.created,
+    })
   })
 
-  it("updates specified fields", async () => {
-    const id = await insert(baseEvent)
-    await update(id, { description: "new desc", project: "new-project" })
-    const row = await getDb()("work_event").where({ id }).first()
-    expect(row.description).toBe("new desc")
-    expect(row.project).toBe("new-project")
+  it("recomputes minutes when the timeframe changes", async () => {
+    const event = await createEvent(base)
+    expect((await updateEvent(event.id, { timeframe: "2d" }))?.minutes).toBe(2880)
   })
 
-  it("does not change created timestamp", async () => {
-    const id = await insert(baseEvent)
-    const before = await getDb()("work_event").where({ id }).first()
-    await update(id, { description: "changed" })
-    const after = await getDb()("work_event").where({ id }).first()
-    expect(after.created).toBe(before.created)
+  it("bumps the updated timestamp", async () => {
+    const event = await createEvent(base)
+    await getDb()("work_event")
+      .where({ id: event.id })
+      .update({ updated: "2020-01-01T00:00:00.000Z" })
+    const updated = await updateEvent(event.id, { description: "x" })
+    expect(updated?.updated).not.toBe("2020-01-01T00:00:00.000Z")
   })
 
-  it("updates the updated timestamp", async () => {
-    const id = await insert({ ...baseEvent, updated: "2020-01-01T00:00:00.000Z" })
-    await update(id, { description: "changed" })
-    const row = await getDb()("work_event").where({ id }).first()
-    expect(row.updated).not.toBe("2020-01-01T00:00:00.000Z")
+  it("returns null for a missing or deleted event", async () => {
+    expect(await updateEvent("missing", { description: "x" })).toBeNull()
+    const event = await createEvent(base)
+    await deleteEvent(event.id)
+    expect(await updateEvent(event.id, { description: "x" })).toBeNull()
   })
 
-  it("does not overwrite id or deleted", async () => {
-    const id = await insert(baseEvent)
-    await update(id, { description: "changed" })
-    const row = await getDb()("work_event").where({ id }).first()
-    expect(row.id).toBe(id)
-    expect(row.deleted).toBe(0)
+  it("rejects invalid values", async () => {
+    const event = await createEvent(base)
+    await expect(updateEvent(event.id, { timeframe: "bad" })).rejects.toThrow()
+  })
+})
+
+describe("deleteEvent", () => {
+  it("soft-deletes and keeps the row", async () => {
+    const event = await createEvent(base)
+    expect(await deleteEvent(event.id)).toBe(true)
+    const row = await getDb()("work_event").where({ id: event.id }).first()
+    expect(row.deleted).toBe(1)
+  })
+
+  it("returns false for a missing or already deleted event", async () => {
+    expect(await deleteEvent("missing")).toBe(false)
+    const event = await createEvent(base)
+    await deleteEvent(event.id)
+    expect(await deleteEvent(event.id)).toBe(false)
   })
 })

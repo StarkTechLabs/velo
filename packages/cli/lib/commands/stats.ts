@@ -1,24 +1,14 @@
 import {
   Config,
-  fetchPaginated,
+  endOfDay,
   formatMinutesToTimeframeString,
-  parseTimeframe,
+  getStats,
+  listEvents,
+  startOfDay,
 } from "@starktech/core"
 import { Command } from "commander"
 
 import { CommandRegistration } from "@/types"
-
-function startOfToday(): Date {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
-function endOfToday(): Date {
-  const d = new Date()
-  d.setHours(23, 59, 59, 999)
-  return d
-}
 
 function formatTime(isoString: string): string {
   return new Date(isoString).toLocaleTimeString("en-US", {
@@ -29,19 +19,18 @@ function formatTime(isoString: string): string {
 }
 
 export const statsCommand: CommandRegistration = {
-  register(program: Command, config: Config) {
+  register(program: Command, _config: Config) {
     const stats = program.command("stats").description("View time tracking statistics.")
 
     stats
       .command("today")
       .description("Show stats for today.")
       .action(async () => {
-        const { data } = await fetchPaginated({
-          userId: config.defaultUserId,
-          minDate: startOfToday(),
-          maxDate: endOfToday(),
-          pageSize: 1000,
-        })
+        const range = { minDate: startOfDay(), maxDate: endOfDay() }
+        const stats = await getStats(range)
+        const {
+          data: [last],
+        } = await listEvents({ ...range, pageSize: 1 })
 
         const dateLabel = new Date().toLocaleDateString("en-US", {
           weekday: "long",
@@ -52,45 +41,28 @@ export const statsCommand: CommandRegistration = {
         console.log(`Today — ${dateLabel}`)
         console.log(divider)
 
-        if (data.length === 0) {
+        if (stats.eventCount === 0) {
           console.log("No events logged today.")
           return
         }
 
-        // Compute totals and per-project minutes
-        let totalMinutes = 0
-        const byProject = new Map<string, number>()
-
-        for (const event of data) {
-          const parsed = parseTimeframe(event.timeframe)
-          totalMinutes += parsed.durationInMinutes
-          byProject.set(
-            event.project,
-            (byProject.get(event.project) ?? 0) + parsed.durationInMinutes,
-          )
-        }
-
-        const eventWord = data.length === 1 ? "event" : "events"
+        const eventWord = stats.eventCount === 1 ? "event" : "events"
         console.log(
-          `Total     ${formatMinutesToTimeframeString(totalMinutes)}  (${data.length} ${eventWord})`,
+          `Total     ${formatMinutesToTimeframeString(stats.totalMinutes)}  (${stats.eventCount} ${eventWord})`,
         )
 
-        // By project, sorted by most time first
         console.log("\nBy Project:")
-        const maxProjectLen = Math.max(...Array.from(byProject.keys()).map((p) => p.length))
-        const sortedProjects = Array.from(byProject.entries()).sort((a, b) => b[1] - a[1])
-        for (const [project, minutes] of sortedProjects) {
+        const maxProjectLen = Math.max(...stats.byProject.map((p) => p.project.length))
+        for (const { project, minutes } of stats.byProject) {
           const timeStr = formatMinutesToTimeframeString(minutes)
           console.log(`  ${project.padEnd(maxProjectLen + 2)}${timeStr}`)
         }
 
-        // Most recent event (data is ordered by timestamp desc)
-        const last = data[0]
         console.log("\nLast Logged:")
         console.log(`  Project   : ${last.project}`)
-        console.log(`  Event     : ${last.description ?? "(no description)"}`)
+        console.log(`  Event     : ${last.description || "(no description)"}`)
         console.log(`  Timeframe : ${last.timeframe}`)
-        console.log(`  At        : ${formatTime(last.timestamp ?? new Date().toISOString())}`)
+        console.log(`  At        : ${formatTime(last.timestamp)}`)
       })
   },
 }

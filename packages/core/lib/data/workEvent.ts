@@ -1,128 +1,111 @@
-import { uuidv7 } from "@/common/uuid"
+import { Knex } from "knex"
 
 import { getDb } from "@/common/db"
-import { WorkEvent } from "@/types"
+import { parseTimeframe } from "@/common/utils"
+import { uuidv7 } from "@/common/uuid"
+import {
+  CreateEvent,
+  EventFilter,
+  ListEventsQuery,
+  Page,
+  UpdateEvent,
+  WorkEvent,
+  createEventSchema,
+  eventFilterSchema,
+  listEventsSchema,
+  updateEventSchema,
+} from "@/types"
 
-const WorkEventColumns = [
+const TABLE = "work_event"
+const COLUMNS = [
   "id",
   "timestamp",
   "timeframe",
+  "minutes",
   "project",
   "description",
-  { userId: "user_id" },
-  "channel",
-  "meta",
   "created",
   "updated",
-  "deleted",
 ]
 
-// Helper function to build query with filters
-const buildQuery = (term?: string, projects?: string[], minDate?: Date, maxDate?: Date) => {
-  const db = getDb()
-  let query = db("work_event").select(WorkEventColumns).where("work_event.deleted", false)
+/** Non-deleted events matching the filter. */
+export const filteredQuery = (filter: EventFilter = {}): Knex.QueryBuilder => {
+  const { term, projects, minDate, maxDate } = eventFilterSchema.parse(filter)
+  const query = getDb()(TABLE).where("deleted", false)
 
   if (term) {
-    query = query.andWhere(function () {
-      this.where(
-        db.raw('lower("work_event"."project")'),
-        "like",
-        `%${term.toLowerCase().trim()}%`,
-      ).orWhere(
-        db.raw('lower("work_event"."description")'),
-        "like",
-        `%${term.toLowerCase().trim()}%`,
-      )
+    const like = `%${term.toLowerCase()}%`
+    query.andWhere((q) => {
+      q.whereRaw("lower(project) like ?", [like]).orWhereRaw("lower(description) like ?", [like])
     })
   }
-  if (projects && projects.length > 0) {
-    query = query.whereIn("project", projects)
-  }
-  if (minDate) {
-    query = query.andWhere("timestamp", ">=", minDate.toISOString())
-  }
-  if (maxDate) {
-    query = query.andWhere("timestamp", "<=", maxDate.toISOString())
-  }
-
+  if (projects?.length) query.whereIn("project", projects)
+  if (minDate) query.andWhere("timestamp", ">=", minDate.toISOString())
+  if (maxDate) query.andWhere("timestamp", "<=", maxDate.toISOString())
   return query
 }
 
-export async function fetchProjects({ userId }: { userId: string }) {
-  const db = getDb()
-  const query = db("work_event")
-    .where("user_id", userId)
+export async function listEvents(input: ListEventsQuery = {}): Promise<Page<WorkEvent>> {
+  const { page, pageSize, ...filter } = listEventsSchema.parse(input)
+
+  const countRow = await filteredQuery(filter).count({ count: "id" }).first()
+  const data = await filteredQuery(filter)
+    .select(COLUMNS)
+    .orderBy([
+      { column: "timestamp", order: "desc" },
+      { column: "id", order: "desc" },
+    ])
+    .offset((page - 1) * pageSize)
+    .limit(pageSize)
+
+  return { data, total: Number(countRow?.count ?? 0), page, pageSize }
+}
+
+export async function getEvent(id: string): Promise<WorkEvent | null> {
+  const row = await getDb()(TABLE).select(COLUMNS).where({ id, deleted: false }).first()
+  return row ?? null
+}
+
+export async function listProjects(): Promise<string[]> {
+  const rows = await getDb()(TABLE)
     .where("deleted", false)
-    .select(["project"])
-    .groupBy("project")
-    .orderBy("project", "asc")
-
-  const results = await query
-  return results
+    .distinct("project")
+    .orderByRaw("project collate nocase asc")
+  return rows.map((r) => r.project)
 }
 
-export async function fetchPaginated({
-  term = "",
-  projects,
-  minDate,
-  maxDate,
-  page = 1,
-  pageSize = 20,
-  userId = "",
-}: {
-  term?: string
-  projects?: string[]
-  minDate?: Date
-  maxDate?: Date
-  page?: number
-  pageSize?: number
-  userId?: string
-}): Promise<{ data: WorkEvent[]; total: number }> {
-  const query = buildQuery(term, projects, minDate, maxDate)
-  query.andWhere("user_id", userId)
-
-  // Get total count
-  const countQuery = query.clone().clearSelect().count({ count: "id" }).first()
-  const countResult = await countQuery
-  const total = countResult?.count ? Number(countResult.count) : 0
-
-  // Pagination
-  const offset = (page - 1) * pageSize
-  const rows = await query.orderBy("timestamp", "desc").offset(offset).limit(pageSize)
-
-  return { data: rows, total }
-}
-
-export async function insert(data: WorkEvent): Promise<string> {
-  const db = getDb()
-  const id = data.id || uuidv7()
-  await db("work_event").insert({
+export async function createEvent(input: CreateEvent): Promise<WorkEvent> {
+  const data = createEventSchema.parse(input)
+  const now = new Date().toISOString()
+  const id = data.id ?? uuidv7()
+  await getDb()(TABLE).insert({
     id,
+    timestamp: data.timestamp ?? now,
     timeframe: data.timeframe,
-    timestamp: data.timestamp || new Date().toISOString(),
-    project: data.project || "",
-    description: data.description || "",
-    channel: data.channel || null,
-    user_id: data.userId || null,
-    meta: JSON.stringify({}),
+    minutes: parseTimeframe(data.timeframe).durationInMinutes,
+    project: data.project,
+    description: data.description,
+    created: now,
+    updated: now,
   })
-  return id
+  return (await getEvent(id)) as WorkEvent
 }
 
-export async function remove(id: string) {
-  const db = getDb()
-  return db("work_event").where({ id }).update({ deleted: true, updated: new Date().toISOString() })
+/** Returns the updated event, or null when it doesn't exist. */
+export async function updateEvent(id: string, input: UpdateEvent): Promise<WorkEvent | null> {
+  const data = updateEventSchema.parse(input)
+  const payload: Record<string, unknown> = { ...data, updated: new Date().toISOString() }
+  if (data.timeframe !== undefined) {
+    payload.minutes = parseTimeframe(data.timeframe).durationInMinutes
+  }
+  const changed = await getDb()(TABLE).where({ id, deleted: false }).update(payload)
+  return changed ? getEvent(id) : null
 }
 
-export async function update(id: string, data: Partial<WorkEvent>): Promise<string> {
-  const db = getDb()
-  const payload: Record<string, unknown> = { updated: new Date().toISOString() }
-  if (data.timeframe !== undefined) payload.timeframe = data.timeframe
-  if (data.project !== undefined) payload.project = data.project
-  if (data.description !== undefined) payload.description = data.description
-  if (data.timestamp !== undefined) payload.timestamp = data.timestamp
-  if (data.userId !== undefined) payload.user_id = data.userId
-  if (data.channel !== undefined) payload.channel = data.channel
-  await db("work_event").where({ id }).update(payload)
-  return id
+/** Soft delete. Returns false when the event doesn't exist. */
+export async function deleteEvent(id: string): Promise<boolean> {
+  const changed = await getDb()(TABLE)
+    .where({ id, deleted: false })
+    .update({ deleted: true, updated: new Date().toISOString() })
+  return changed > 0
 }

@@ -9,5 +9,3 @@ export const uuidv7 = (now: number = Date.now()): string => {
   const hex = bytes.toString("hex")
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
-
-export const NIL_UUID = "00000000-0000-0000-0000-000000000000"

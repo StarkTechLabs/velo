@@ -31,7 +31,7 @@ npm run test -w @starktech/core
 npm run test -w @starktech/velo
 
 # Run a single test file (from repo root)
-npx jest packages/core/lib/common/utils.spec.ts
+npm test -w @starktech/core -- lib/common/utils.spec.ts
 
 # Lint all packages
 npm run lint
@@ -44,12 +44,18 @@ npm run lint:fix
 
 ### Core Package (`packages/core/lib/`)
 
-- **`types.ts`** — Zod schemas and TypeScript types for `WorkEvent`, `User`, `Team`, `Channel`, `GroupedEvent`, and timeframes. Timeframe format is `<number><unit>` (e.g., `1h`, `30m`, `2d`, `1.5h`).
-- **`common/config.ts`** — Config stored at `~/.velo/config.json`. Default DB path: `~/.velo/userDb.sqlite`. Functions: `getConfig()`, `writeConfig()`, `validateConfig()`, `ensureConfig()`.
-- **`common/db.ts`** — SQLite via `better-sqlite3` + `knex`. Uses a global singleton `global.db`. Must call config init before DB access.
-- **`data/workEvent.ts`** — CRUD for `work_event` table. Uses UUID v7 for IDs, soft deletes (`deleted: true`), metadata stored as JSON (channel/team/user). Supports pagination and filtering by term, project, and date range.
-- **`common/utils.ts`** — Timeframe parsing and formatting utilities.
-- **`index.ts`** — Public API exports for the core package.
+Single-user. The service layer below is the one API surface the CLI (and later the API package) calls.
+
+- **`types.ts`** — Zod schemas (`createEventSchema`, `updateEventSchema`, `listEventsSchema`, `timeframeSchema`) and types (`WorkEvent`, `Stats`, `GroupedEvent`, `Page`). Timeframe format is `<number><unit>` (e.g., `30m`, `1.5h`, `2d`); `minutes` is stored on each event for SQL aggregation.
+- **`common/config.ts`** — Config at `~/.velo/config.json` (override the directory with `VELO_HOME`), validated with zod and merged with defaults: `databaseFilePath`, `api: {host, port}`, `dashboard: {port}`. Also `getRunPath()` (`~/.velo/run`) for pid files/logs.
+- **`common/db.ts`** — SQLite via `better-sqlite3` + `knex`, WAL + busy timeout so processes can share the file. Global singleton; call `initDb(config)` first (`closeDb()` to shut down).
+- **`migrations/`** — Embedded knex migrations (no migration files on disk). Add new ones to `MIGRATIONS` + `MIGRATION_MAP`.
+- **`data/workEvent.ts`** — `createEvent`, `getEvent`, `listEvents` (term/project/date filters, pagination), `updateEvent`, `deleteEvent` (soft delete), `listProjects`. Inputs are validated by the zod schemas, so callers may pass raw input.
+- **`data/stats.ts`** — `getStats(filter)`: totals, by project, by local day.
+- **`common/group.ts`** — Pure helpers `groupEvents` and `eventsToCsv` (no node imports, safe for the browser).
+- **`common/utils.ts`, `dates.ts`, `uuid.ts`, `errors.ts`** — Timeframe parsing/formatting, date helpers, UUID v7 (`crypto`-based, no dependency), `errorMessage`.
+- **`testing/memoryDb.ts`** — In-memory migrated SQLite for specs.
+- **`index.ts`** — Public API exports.
 
 ### CLI Package (`packages/cli/lib/`)
 

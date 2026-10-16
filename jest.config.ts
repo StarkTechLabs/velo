@@ -2,6 +2,7 @@
 export default {
   preset: "ts-jest",
   testEnvironment: "node",
+  watchman: false,
   roots: ["<rootDir>/packages"],
   transform: {
     "^.+\\.tsx?$": "ts-jest",
