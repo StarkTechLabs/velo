@@ -1,5 +1,6 @@
 import * as fs from "node:fs"
 import * as http from "node:http"
+import * as path from "node:path"
 
 import { configSchema } from "@starktech/core"
 
@@ -75,6 +76,8 @@ describe("startService / stopService", () => {
       String(fake.config.dashboard.port),
       "--api-url",
       `http://127.0.0.1:${fake.config.api.port}`,
+      "--home",
+      process.env.VELO_HOME,
     ])
     const api = await (await fetch(`http://127.0.0.1:${fake.config.api.port}/api/health`)).json()
     expect(api.args).toEqual(["--host", "127.0.0.1", "--port", String(fake.config.api.port)])
@@ -147,6 +150,56 @@ describe("port conflicts and stale state", () => {
     expect(await stopService("api", fake.config)).toBe("not-running")
     expect(readPid("api")).toBe(process.pid)
     expect(isAlive(process.pid)).toBe(true)
+  })
+})
+
+describe("services that belong to a different data directory", () => {
+  // The incident this guards against: a real, running velo (default ports, ~/.velo) and a
+  // developer sandbox (VELO_HOME elsewhere) with the same ports. The sandbox's CLI used to
+  // report the real services as its own and `velo api stop` would kill them.
+  const asOtherHome = <T>(fn: () => Promise<T>) => {
+    const sandbox = process.env.VELO_HOME
+    process.env.VELO_HOME = path.join(path.dirname(sandbox as string), "other-home")
+    return fn().finally(() => (process.env.VELO_HOME = sandbox))
+  }
+
+  it("reports them as a conflict, not as running", async () => {
+    await startService("api", fake.config)
+    const status = await asOtherHome(() => getStatus("api", fake.config))
+    expect(status.state).toBe("conflict")
+    expect(status.detail).toContain("different data directory")
+    expect(status.detail).toContain(process.env.VELO_HOME)
+  })
+
+  it("won't adopt them on start, and says how to move to another port", async () => {
+    await startService("api", fake.config)
+    const error = await asOtherHome(() => startService("api", fake.config)).catch((e) => e)
+    expect(error.message).toContain("different data directory")
+    expect(error.message).toContain("velo configure --api-port")
+  })
+
+  it("never stops them", async () => {
+    const { pid } = await startService("api", fake.config)
+    const error = await asOtherHome(() => stopService("api", fake.config)).catch((e) => e)
+    expect(error.message).toContain("Not touching it")
+    expect(isAlive(pid)).toBe(true)
+    expect((await getStatus("api", fake.config)).state).toBe("running") // still ours at home
+    expect(await stopService("api", fake.config)).toBe("stopped")
+  })
+
+  it("accepts services too old to report a home", async () => {
+    await listenForeign(fake.config.api.port, { name: "velo-api", version: "0.0.1", pid: 4242 })
+    expect(await getStatus("api", fake.config)).toMatchObject({ state: "running", pid: 4242 })
+  })
+
+  it("compares directories as paths, not strings", async () => {
+    await listenForeign(fake.config.api.port, {
+      name: "velo-api",
+      version: "1",
+      pid: 1,
+      home: `${process.env.VELO_HOME}/../.velo/`,
+    })
+    expect((await getStatus("api", fake.config)).state).toBe("running")
   })
 })
 

@@ -133,7 +133,7 @@ grouped events table, edit sheet).
    `grouped-events-table`, `edit-resource-sheet`, filters, charts (`recharts`), `export-csv`,
    `filter-storage`, `use-toast`. Remove unused shadcn components (sidebar, drawer, avatar, etc.) after
    checking usage. Replace `zod@3` usage with the repo's zod 4.
-3. **Contract with the CLI (Phase 4, implemented):** the `velo-dashboard` bin accepts `--port <n>` and `--api-url <url>`, and serves `GET /config.json` returning `{ "name": "velo-dashboard", "version": "...", "pid": <process.pid>, "apiUrl": "<api-url>" }`. The CLI uses that for detection and for stopping it (it signals the reported pid). It binds `127.0.0.1` only.
+3. **Contract with the CLI (Phase 4, implemented):** the `velo-dashboard` bin accepts `--port <n>` and `--api-url <url>`, and serves `GET /config.json` returning `{ "name": "velo-dashboard", "version": "...", "pid": <process.pid>, "apiUrl": "<api-url>", "home": "<velo data dir>" }` (`--home <dir>` is passed by the CLI; a service whose `home` differs from the CLI's is treated as a port conflict, never adopted or stopped). The CLI uses that for detection and for stopping it (it signals the reported pid). It binds `127.0.0.1` only.
 4. API client module; base URL from `/config.json` served alongside the bundle (so the published,
    prebuilt SPA can be pointed at any port without rebuilding), with a clear "API not reachable" state
    and retry.

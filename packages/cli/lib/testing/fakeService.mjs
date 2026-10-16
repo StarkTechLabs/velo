@@ -24,7 +24,15 @@ else {
       return res.end()
     }
     res.setHeader("Content-Type", "application/json")
-    res.end(JSON.stringify({ name, version: "0.0.0-test", pid: process.pid, args }))
+    res.end(
+      JSON.stringify({
+        name,
+        version: "0.0.0-test",
+        pid: process.pid,
+        args,
+        home: arg("--home") ?? process.env.VELO_HOME,
+      }),
+    )
   })
   server.listen(port, arg("--host") ?? "127.0.0.1", () =>
     console.log(`${name} listening on ${port}`),

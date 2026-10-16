@@ -5,7 +5,7 @@ import { GroupedEventsTable } from "@/components/grouped-events-table"
 import { DataRow, ResourceTable } from "@/components/resource-table"
 import { ColDef } from "@/components/resource-table/types"
 import { Card } from "@/components/ui/card"
-import { toast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import { deleteEvent, errorText } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { EditResourceSheet } from "./edit-resource-sheet"
@@ -48,11 +48,7 @@ export const EventsTable = ({
       await deleteEvent(row.id)
       onDataChange?.()
     } catch (error) {
-      toast({
-        title: "Failed to delete event",
-        description: errorText(error),
-        variant: "destructive",
-      })
+      toast.error("Failed to delete event", { description: errorText(error) })
     }
   }
 

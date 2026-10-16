@@ -23,6 +23,7 @@ beforeEach(async () => {
     port: 0,
     apiUrl: "http://127.0.0.1:4317",
     version: "1.2.3",
+    home: "/tmp/velo-home",
     root,
   })
   base = `http://127.0.0.1:${running.port}`
@@ -43,6 +44,7 @@ describe("config.json", () => {
       version: "1.2.3",
       pid: process.pid,
       apiUrl: "http://127.0.0.1:4317",
+      home: "/tmp/velo-home",
     })
   })
 })

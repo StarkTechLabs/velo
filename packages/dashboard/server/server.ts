@@ -7,6 +7,8 @@ export type DashboardOptions = {
   port: number
   apiUrl: string
   version: string
+  /** The velo data directory this dashboard belongs to, reported to the CLI. */
+  home?: string
   /** Directory holding the built single-page app. */
   root: string
 }
@@ -28,6 +30,7 @@ export const startDashboard = async (options: DashboardOptions): Promise<Running
           version: options.version,
           pid: process.pid,
           apiUrl: options.apiUrl,
+          home: options.home ?? null,
         }),
       )
       return

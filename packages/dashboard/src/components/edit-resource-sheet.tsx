@@ -38,7 +38,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
-import { toast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import { errorText, fetchProjects, saveEvent } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { formatMinutesToTimeframeString, parseTimeframe } from "@starktech/core/browser"
@@ -189,18 +189,15 @@ export function EditResourceSheet({
     }
 
     if (!error) {
-      toast({
-        title: event ? "Event updated" : "Event created",
+      toast.success(event ? "Event updated" : "Event created", {
         description: `The event has been ${event ? "updated" : "created"} successfully.`,
       })
       onDataChange?.()
       resetForm()
       onClose()
     } else {
-      toast({
-        title: `Error ${event ? "updating" : "creating"} event`,
+      toast.error(`Error ${event ? "updating" : "creating"} event`, {
         description: errorText(error),
-        variant: "destructive",
       })
     }
     setIsLoading(false)

@@ -29,9 +29,10 @@ npm ci                      # install every workspace
 npm run build               # builds api, cli and dashboard, with core bundled in (a few seconds)
 . scripts/dev-env.sh        # sandbox + a `velo` command that runs this checkout
 velo init
+velo configure --api-port 4417 --dashboard-port 4418   # own ports, so it can't clash with a real velo
 node scripts/seed-dev.mjs > /tmp/velo-seed.csv && velo import csv /tmp/velo-seed.csv
-velo start                  # API on :4317, dashboard on :4318
-velo open                   # or visit http://localhost:4318
+velo start                  # API on :4417, dashboard on :4418
+velo open                   # or visit http://localhost:4418
 ```
 
 When you are done: `velo stop`.
@@ -54,6 +55,14 @@ It sets `VELO_HOME` to `./.velo-dev` (git-ignored) and defines a `velo` shell fu
 `packages/cli/dist/main.js`. It works in bash and zsh, from any directory, and prints a warning if
 `VELO_HOME` is set to your real directory. **Source it in every new terminal**; without it, `velo`
 means whatever you installed globally, using your real data.
+
+**Give the sandbox its own ports** if you also run velo for real (the defaults are 4317 and
+4318): `velo configure --api-port 4417 --dashboard-port 4418`. The CLI will not mix the two up
+even if you forget: each service reports which data directory it belongs to, and the CLI treats
+one from _another_ directory as a port conflict, never as its own. It will not report it as
+running, adopt it, or stop it. (Services started by builds from before this check don't report a
+directory, so restart them once, `velo stop && velo start`, after upgrading.) Still, separate
+ports save you the confusing error.
 
 Everything below assumes the sandbox is active. To start over:
 
@@ -114,11 +123,11 @@ npm run watch -w @starktech/velo-api            # terminal 1: rebuild on change
 node --watch packages/api/dist/main.js          # terminal 2: restart when the bundle changes
 ```
 
-Poke at it with curl (the API only accepts loopback `Host` headers and, for browser-style
+Poke at it with curl (use your sandbox port, 4417, if you configured one; the examples show the default. The API only accepts loopback `Host` headers and, for browser-style
 requests, only the dashboard's origin; plain curl is fine):
 
 ```bash
-curl -s localhost:4317/api/health
+curl -s localhost:4317/api/health          # also shows the database file and data directory it serves
 curl -s 'localhost:4317/api/events?project=velo&min_date=2026-01-01&pageSize=5'
 curl -s -X POST localhost:4317/api/events \
   -H 'Content-Type: application/json' \
@@ -278,11 +287,11 @@ velo list            # runs the migration on the copy
 
 ## Ports and configuration
 
-| What                 | Default          | Change it                                                                           |
-| -------------------- | ---------------- | ----------------------------------------------------------------------------------- |
-| API                  | `127.0.0.1:4317` | `velo configure --api-port 4400` / `--api-host`, or `--port`/`--host` on `velo-api` |
-| Dashboard (built)    | `127.0.0.1:4318` | `velo configure --dashboard-port 4500`                                              |
-| Dashboard (Vite dev) | `localhost:5173` | `npm run dev -w @starktech/velo-dashboard -- --port 5200`                           |
+| What                 | Default                          | Change it                                                                           |
+| -------------------- | -------------------------------- | ----------------------------------------------------------------------------------- |
+| API                  | `127.0.0.1:4317` (sandbox: 4417) | `velo configure --api-port 4400` / `--api-host`, or `--port`/`--host` on `velo-api` |
+| Dashboard (built)    | `127.0.0.1:4318` (sandbox: 4418) | `velo configure --dashboard-port 4500`                                              |
+| Dashboard (Vite dev) | `localhost:5173`                 | `npm run dev -w @starktech/velo-dashboard -- --port 5200`                           |
 
 `velo configure --list` prints the current configuration, which lives in
 `$VELO_HOME/config.json`. Restart services after changing it (`velo stop && velo start`).
@@ -313,15 +322,16 @@ VELO_ALLOWED_ORIGINS=http://localhost:5173 node packages/api/dist/main.js
 
 ## Troubleshooting
 
-| Symptom                                                                               | Likely cause and fix                                                                                                                                                                                       |
-| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `velo: the CLI isn't built yet`                                                       | Run `npm run build`.                                                                                                                                                                                       |
-| `The API is not installed (… has it been built?)`                                     | `packages/api/dist` is missing: `npm run build -w @starktech/velo-api`. (Ignore the `npm install -g` hint; that is for end users.)                                                                         |
-| `port 4317 is already in use` / status says `conflict`                                | Another program (or a stale dev process) holds the port. Find it with `lsof -iTCP:4317 -sTCP:LISTEN`, or pick another port with `velo configure --api-port …`. velo never kills a process it didn't start. |
-| `The API exited during startup`                                                       | The error from the service's log is printed under it; the same text is in `velo api logs`.                                                                                                                 |
-| Dashboard in dev shows "Can't reach the velo API"                                     | The API isn't running, or `VELO_API_URL` points elsewhere. `velo api start`, then Retry.                                                                                                                   |
-| `403 Forbidden origin` / `Forbidden host` from the API                                | A browser-style request from an origin that isn't the dashboard's, or a non-loopback `Host` header. Use the Vite proxy, or see `VELO_ALLOWED_ORIGINS` above.                                               |
-| An error loading `better-sqlite3` (mentions a bindings file or `NODE_MODULE_VERSION`) | The native module was built for a different Node version. Run `npm rebuild better-sqlite3` (or `npm ci`) after switching Node versions.                                                                    |
-| Tests hang or are very slow to start                                                  | Make sure you're using the repo's jest configs (`watchman: false`); run per package with `npm test -w …`, not bare `jest` at the root.                                                                     |
-| Stale `velo` behaviour after pulling                                                  | Rebuild: `npm run build`. The `velo` helper runs `dist/`, not the sources.                                                                                                                                 |
-| Want a clean slate                                                                    | `velo stop; rm -rf .velo-dev`. For build output too: `rm -rf packages/*/dist`.                                                                                                                             |
+| Symptom                                                                               | Likely cause and fix                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `velo: the CLI isn't built yet`                                                       | Run `npm run build`.                                                                                                                                                                                          |
+| `The API is not installed (… has it been built?)`                                     | `packages/api/dist` is missing: `npm run build -w @starktech/velo-api`. (Ignore the `npm install -g` hint; that is for end users.)                                                                            |
+| status says `conflict … for a different data directory`                               | A velo service from another data directory (usually your real `~/.velo`) holds the port. That is the safety check working: give this one its own ports with `velo configure --api-port … --dashboard-port …`. |
+| `port 4317 is already in use` / status says `conflict`                                | Another program (or a stale dev process) holds the port. Find it with `lsof -iTCP:4317 -sTCP:LISTEN`, or pick another port with `velo configure --api-port …`. velo never kills a process it didn't start.    |
+| `The API exited during startup`                                                       | The error from the service's log is printed under it; the same text is in `velo api logs`.                                                                                                                    |
+| Dashboard in dev shows "Can't reach the velo API"                                     | The API isn't running, or `VELO_API_URL` points elsewhere. `velo api start`, then Retry.                                                                                                                      |
+| `403 Forbidden origin` / `Forbidden host` from the API                                | A browser-style request from an origin that isn't the dashboard's, or a non-loopback `Host` header. Use the Vite proxy, or see `VELO_ALLOWED_ORIGINS` above.                                                  |
+| An error loading `better-sqlite3` (mentions a bindings file or `NODE_MODULE_VERSION`) | The native module was built for a different Node version. Run `npm rebuild better-sqlite3` (or `npm ci`) after switching Node versions.                                                                       |
+| Tests hang or are very slow to start                                                  | Make sure you're using the repo's jest configs (`watchman: false`); run per package with `npm test -w …`, not bare `jest` at the root.                                                                        |
+| Stale `velo` behaviour after pulling                                                  | Rebuild: `npm run build`. The `velo` helper runs `dist/`, not the sources.                                                                                                                                    |
+| Want a clean slate                                                                    | `velo stop; rm -rf .velo-dev`. For build output too: `rm -rf packages/*/dist`.                                                                                                                                |

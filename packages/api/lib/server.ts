@@ -1,6 +1,6 @@
 import type { Server } from "node:http"
 
-import { Config, closeDb, initDb } from "@starktech/core"
+import { Config, closeDb, getConfigPath, initDb } from "@starktech/core"
 
 import { createApp } from "./app"
 import { isLoopbackHost } from "./security"
@@ -28,6 +28,7 @@ export const startServer = async (
   const app = createApp({
     version: VERSION,
     databaseFilePath: config.databaseFilePath,
+    home: getConfigPath(),
     allowedOrigins: allowedOriginsFor(config),
     checkHost: isLoopbackHost(config.api.host),
     log,

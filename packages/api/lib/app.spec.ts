@@ -33,6 +33,7 @@ describe("health", () => {
       version: "1.2.3",
       pid: process.pid,
       databaseFilePath: "/tmp/test.sqlite",
+      home: "/tmp/velo-home",
     })
     expect(res.headers["cache-control"]).toBe("no-store")
     expect(res.headers["x-powered-by"]).toBeUndefined()

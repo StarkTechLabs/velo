@@ -23,6 +23,7 @@ export const testApp = () =>
   createApp({
     version: "1.2.3",
     databaseFilePath: "/tmp/test.sqlite",
+    home: "/tmp/velo-home",
     allowedOrigins: [DASHBOARD_ORIGIN],
     log: () => {},
   })

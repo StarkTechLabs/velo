@@ -8,6 +8,8 @@ import { hostGuard, originGuard, requireJson } from "./security"
 export type AppOptions = {
   version: string
   databaseFilePath: string
+  /** The velo data directory this API serves (`~/.velo` or `$VELO_HOME`). Reported by /api/health. */
+  home?: string
   /** Browser origins allowed to call the API, e.g. the dashboard's. */
   allowedOrigins: string[]
   /** Validate the Host header (on unless the server is bound to a non-loopback address). */
@@ -44,6 +46,7 @@ export const createApp = (options: AppOptions): Express => {
       pid: process.pid,
       uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
       databaseFilePath: options.databaseFilePath,
+      home: options.home ?? null,
     })
   })
   app.use("/api/events", eventsRouter())

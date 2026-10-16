@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 
 import SearchBar from "@/components/search/bar"
 import { useDebounce } from "@/hooks/use-debounce"
-import { toast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import { getInitialDateFilter, getInitialProjectFilter } from "@/lib/filter-storage"
 import { cn } from "@/lib/utils"
 import { ApiError, errorText, fetchCsv, fetchEvents } from "@/lib/api"
@@ -91,11 +91,7 @@ export default function App() {
       if (error instanceof ApiError && error.status === 0) {
         setConnectionError(error.message)
       } else {
-        toast({
-          title: "Failed to query data",
-          description: errorText(error),
-          variant: "destructive",
-        })
+        toast.error("Failed to query data", { description: errorText(error) })
       }
     } finally {
       setLoading(false)
@@ -108,10 +104,8 @@ export default function App() {
 
   const handleExportCSV = async () => {
     if (data.length === 0) {
-      toast({
-        title: "No data to export",
+      toast.error("No data to export", {
         description: "Please apply filters to get data before exporting.",
-        variant: "destructive",
       })
       return
     }
@@ -122,17 +116,10 @@ export default function App() {
       const filename = `velo-export-${timestamp}.csv`
       downloadCSV(csvContent, filename)
 
-      toast({
-        title: "Export successful",
-        description: `Exported events to ${filename}`,
-      })
+      toast.success("Export successful", { description: `Exported events to ${filename}` })
     } catch (error) {
       console.error("Export failed:", error)
-      toast({
-        title: "Export failed",
-        description: errorText(error),
-        variant: "destructive",
-      })
+      toast.error("Export failed", { description: errorText(error) })
     }
   }
 

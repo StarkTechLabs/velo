@@ -9,7 +9,7 @@ const VERSION = typeof __VERSION__ === "undefined" ? "0.0.0-dev" : __VERSION__
 
 const HELP = `velo-dashboard ${VERSION}
 
-Usage: velo-dashboard --port <port> --api-url <url>
+Usage: velo-dashboard --port <port> --api-url <url> [--home <dir>]
 
 Serves the velo dashboard on http://127.0.0.1:<port>. The page talks to the velo API at
 <api-url> (default http://127.0.0.1:4317). Start the API first: velo api start
@@ -20,6 +20,7 @@ const main = async () => {
     options: {
       port: { type: "string", default: "4318" },
       "api-url": { type: "string", default: "http://127.0.0.1:4317" },
+      home: { type: "string" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
     },
@@ -36,6 +37,7 @@ const main = async () => {
     port,
     apiUrl: values["api-url"] as string,
     version: VERSION,
+    home: values.home,
     root: join(dirname(fileURLToPath(import.meta.url)), "app"),
   })
   console.log(`velo-dashboard ${VERSION} listening on http://127.0.0.1:${running.port}`)

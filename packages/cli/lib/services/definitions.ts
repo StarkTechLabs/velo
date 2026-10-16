@@ -1,4 +1,4 @@
-import { Config } from "@starktech/core"
+import { Config, getConfigPath } from "@starktech/core"
 
 export type ServiceName = "api" | "dashboard"
 
@@ -7,7 +7,7 @@ export type ServiceName = "api" | "dashboard"
  * dashboard at `/config.json` (alongside the `apiUrl` its page needs). `name` is how the CLI
  * tells our service apart from some other program that happens to hold the port.
  */
-export type ServiceInfo = { name: string; version: string; pid: number }
+export type ServiceInfo = { name: string; version: string; pid: number; home?: string | null }
 
 export interface ServiceDef {
   name: ServiceName
@@ -57,7 +57,14 @@ export const SERVICES: Record<ServiceName, ServiceDef> = {
     host: () => "127.0.0.1",
     port: (config) => config.dashboard.port,
     url: (config) => `http://localhost:${config.dashboard.port}`,
-    args: (config) => ["--port", String(config.dashboard.port), "--api-url", apiUrl(config)],
+    args: (config) => [
+      "--port",
+      String(config.dashboard.port),
+      "--api-url",
+      apiUrl(config),
+      "--home",
+      getConfigPath(),
+    ],
   },
 }
 

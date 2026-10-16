@@ -1,4 +1,6 @@
-import { Config } from "@starktech/core"
+import * as path from "node:path"
+
+import { Config, getConfigPath } from "@starktech/core"
 
 import { ServiceDef, ServiceInfo } from "./definitions"
 
@@ -31,6 +33,15 @@ export const probe = async (def: ServiceDef, config: Config, timeoutMs = 1000): 
     return {
       state: "foreign",
       detail: `it answered ${res.status} but is not the velo ${def.label}`,
+    }
+  }
+  // A velo service from a different data directory (say, your real ~/.velo while you work in a
+  // sandbox) is not ours to adopt, report as running, or stop, even though it looks identical.
+  // Services too old to report a home are given the benefit of the doubt.
+  if (typeof body.home === "string" && path.resolve(body.home) !== path.resolve(getConfigPath())) {
+    return {
+      state: "foreign",
+      detail: `it is the velo ${def.label} for a different data directory (${body.home})`,
     }
   }
   return {
