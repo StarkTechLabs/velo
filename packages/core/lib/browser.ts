@@ -2,6 +2,7 @@
 // Used by the dashboard through `@starktech/core/browser`.
 export * from "./common/dates"
 export * from "./common/group"
+export * from "./common/version"
 export { formatMinutesToTimeframeString, parseTimeframe, validateTimeframe } from "./common/utils"
 export type {
   DayStat,

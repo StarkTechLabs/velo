@@ -17,8 +17,10 @@ import { useDebounce } from "@/hooks/use-debounce"
 import { toast } from "sonner"
 import { getInitialDateFilter, getInitialProjectFilter } from "@/lib/filter-storage"
 import { cn } from "@/lib/utils"
-import { ApiError, errorText, fetchCsv, fetchEvents } from "@/lib/api"
+import { ApiError, errorText, fetchCsv, fetchEvents, fetchHealth } from "@/lib/api"
 import { downloadCSV } from "@/lib/download"
+import { versionsCompatible } from "@starktech/core/browser"
+
 import { WorkEvent } from "@/types"
 
 export default function App() {
@@ -33,11 +35,19 @@ export default function App() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
+  const [apiVersion, setApiVersion] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(true)
   const [showSearch, setShowSearch] = useState(false)
   const [isAddEventSheetOpen, setIsAddEventSheetOpen] = useState(false)
 
   const debouncedTerm = useDebounce(searchTerm, 300)
+
+  // The dashboard and API are separate installs; tell the user if they have drifted apart.
+  useEffect(() => {
+    fetchHealth()
+      .then((health) => setApiVersion(health.version))
+      .catch(() => {}) // an unreachable API is reported by the data fetch below
+  }, [])
 
   // Hydrate filter state from localStorage before first fetch (avoids flash of unfiltered data)
   useEffect(() => {
@@ -224,6 +234,17 @@ export default function App() {
               <ProjectFilter value={selectedProjects} onChange={handleProjectChange} />
               <DateFilter value={selectedDateRange} onChange={handleDateRangeChange} />
             </FilterContainer>
+          </div>
+        )}
+
+        {apiVersion && !versionsCompatible(__APP_VERSION__, apiVersion) && (
+          <div
+            role="status"
+            className="bg-gray-900/50 rounded-2xl shadow-2xl border border-gray-700 p-6 backdrop-blur-sm text-gray-300 text-sm"
+          >
+            The dashboard (v{__APP_VERSION__}) and the API (v{apiVersion}) are different versions
+            and may not work together. Update both: npm install -g @starktech/velo-api@latest
+            @starktech/velo-dashboard@latest, then velo stop && velo start.
           </div>
         )}
 

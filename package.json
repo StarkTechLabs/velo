@@ -8,9 +8,12 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present",
-    "lint:fix": "npm run lint:fix --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present && eslint scripts",
+    "lint:fix": "npm run lint:fix --workspaces --if-present && eslint scripts --fix",
+    "test": "npm run test --workspaces --if-present && npm run test:scripts",
+    "test:scripts": "node --test scripts/*.test.mjs",
+    "version:set": "node scripts/set-version.mjs",
+    "version:check": "node scripts/set-version.mjs --check"
   },
   "keywords": [
     "velo",

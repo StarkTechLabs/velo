@@ -37,7 +37,10 @@ export const useFakeServices = () => {
     })
     process.env.FAKE_API_PORT = String(state.config.api.port)
     delete process.env.FAKE_MODE
-    Object.assign(serviceDeps, original, { resolveBin: () => FAKE_SERVICE })
+    Object.assign(serviceDeps, original, {
+      resolveBin: () => FAKE_SERVICE,
+      autostart: () => null, // never reach the real launchctl/systemctl
+    })
   })
 
   afterEach(() => {
@@ -51,7 +54,7 @@ export const useFakeServices = () => {
         }
       }
     }
-    delete process.env.VELO_HOME
+    process.env.VELO_HOME = process.env.VELO_TEST_SAFE_HOME // never leave it unset
     delete process.env.FAKE_API_PORT
     delete process.env.FAKE_MODE
     fs.rmSync(state.home, { recursive: true, force: true })

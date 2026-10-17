@@ -44,6 +44,26 @@ describe("status", () => {
     expect(out).toMatch(/Dashboard\s+not installed/)
   })
 
+  it("warns when a running service is an incompatible version of this CLI", async () => {
+    await cli("api", "start") // the fake service reports 0.0.0-test
+    serviceDeps.cliVersion = () => "0.1.0"
+    const { out } = await cli("status")
+    expect(out).toContain("warning: the API is v0.0.0-test but this velo is v0.1.0.")
+    expect(out).toContain("npm install -g @starktech/velo@latest @starktech/velo-api@latest")
+    expect(out).toContain("velo stop && velo start")
+    // machine-readable output stays clean
+    const json = (await cli("status", "--json")).out
+    expect(() => JSON.parse(json)).not.toThrow()
+  })
+
+  it("stays quiet when versions are compatible", async () => {
+    await cli("api", "start")
+    serviceDeps.cliVersion = () => "0.0.0-test"
+    expect((await cli("status")).out).not.toContain("warning")
+    serviceDeps.cliVersion = () => "0.0.0-dev" // a dev run is never accused of a mismatch
+    expect((await cli("status")).out).not.toContain("warning")
+  })
+
   it("`<service> status` exits 1 unless running", async () => {
     await cli("api", "status")
     expect(process.exitCode).toBe(1)

@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs"
+
 import { build } from "esbuild"
+
+const { version } = JSON.parse(readFileSync("package.json", "utf8"))
 
 const isWatch = process.argv.includes("--watch")
 
@@ -41,6 +45,7 @@ async function runBuild() {
       ],
       define: {
         "process.env.NODE_ENV": '"production"',
+        __VERSION__: JSON.stringify(version),
       },
     }
 

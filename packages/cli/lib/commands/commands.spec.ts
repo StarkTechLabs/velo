@@ -155,6 +155,27 @@ describe("projects and stats", () => {
     expect((await runCli(["projects"])).failure).toBeUndefined()
   })
 
+  it("summarises any period by project, with the list filters", async () => {
+    expect((await runCli(["stats", "summary"])).out).toBe("No events found.")
+    await seed() // alpha 1h on 2026-01-05, beta 30m on 2026-01-06
+    await createEvent({ project: "alpha", timeframe: "30m", timestamp: "2026-01-06T15:00:00.000Z" })
+
+    const all = (await runCli(["stats", "summary"])).out
+    expect(all).toContain("Total  2.00h  (3 events over 2 days)")
+    expect(all).toMatch(/alpha\s+1\.50\s+2/)
+    expect(all).toMatch(/beta\s+0\.50\s+1/)
+    expect(all.indexOf("alpha")).toBeLessThan(all.indexOf("beta")) // most time first
+
+    const filtered = (await runCli(["stats", "summary", "-p", "beta"])).out
+    expect(filtered).toContain("Total  0.50h  (1 event over 1 day)")
+    expect(filtered).not.toContain("alpha")
+
+    const json = JSON.parse(
+      (await runCli(["stats", "summary", "--from", "2026-01-06", "--json"])).out,
+    )
+    expect(json).toMatchObject({ totalMinutes: 60, eventCount: 2 })
+  })
+
   it("reports today's stats", async () => {
     expect((await runCli(["stats", "today"])).out).toContain("No events logged today.")
     await createEvent({ project: "p", timeframe: "90m", description: "now" })

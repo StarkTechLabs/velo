@@ -1,6 +1,6 @@
 import * as fs from "node:fs"
 
-import { Config } from "@starktech/core"
+import { Config, versionsCompatible } from "@starktech/core"
 import { Command } from "commander"
 
 import { printJson, renderTable } from "@/format"
@@ -36,7 +36,7 @@ const start = async (name: ServiceName, config: Config): Promise<void> => {
   const result = await startService(name, config)
   console.log(
     result.status === "started"
-      ? `${label} started at ${result.url} (pid ${result.pid})`
+      ? `${label} started at ${result.url} (pid ${result.pid}${result.via ? `, by ${result.via}` : ""})`
       : `${label} already running at ${result.url} (pid ${result.pid})`,
   )
   if (result.status === "started") console.log(`Logs: velo ${name} logs`)
@@ -81,6 +81,20 @@ const follow = (file: string, from: number): Promise<never> => {
     position = current.size
   })
   return new Promise<never>(() => {})
+}
+
+/** Warns when a running service is a different (incompatible) version from this CLI. */
+const versionWarnings = (statuses: ServiceStatus[]): string[] => {
+  const cli = serviceDeps.cliVersion()
+  const stale = statuses.filter((s) => s.version && !versionsCompatible(cli, s.version))
+  if (stale.length === 0) return []
+  const packages = stale.map((s) => SERVICES[s.name].packageName)
+  return [
+    "",
+    ...stale.map((s) => `warning: the ${s.label} is v${s.version} but this velo is v${cli}.`),
+    `They are released together; update them together: npm install -g @starktech/velo@latest ${packages.map((p) => `${p}@latest`).join(" ")}`,
+    "then restart the services: velo stop && velo start",
+  ]
 }
 
 const registerServiceGroup = (program: Command, name: ServiceName, config: Config) => {
@@ -138,8 +152,9 @@ export const servicesCommand: CommandRegistration = {
       .option("--json", "Output JSON")
       .action(async (options) => {
         const statuses = await getAllStatuses(config)
-        if (options.json) printJson(statuses)
-        else printStatuses(statuses)
+        if (options.json) return printJson(statuses)
+        printStatuses(statuses)
+        for (const line of versionWarnings(statuses)) console.log(line)
       })
 
     program

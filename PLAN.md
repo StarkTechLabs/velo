@@ -145,7 +145,7 @@ grouped events table, edit sheet).
 
 **Exit:** dashboard visually matches busybee-x and does every operation through the API.
 
-## Phase 6: Autostart on login
+## Phase 6: Autostart on login (implemented; see `docs/development.md`)
 
 1. `velo service install [api|dashboard|all]`, `uninstall`, `status`.
 2. macOS: write `~/Library/LaunchAgents/dev.starktech.velo.{api,dashboard}.plist` (`RunAtLoad`,
@@ -163,7 +163,7 @@ grouped events table, edit sheet).
 
 **Exit:** after reboot/login both come up, `velo status` shows them healthy.
 
-## Phase 7: Publishing, CI, docs
+## Phase 7: Publishing, CI, docs (implemented; see `docs/releasing.md` and `docs/migrating-from-busybee.md`)
 
 1. `files`, `bin`, `exports`, `engines`, `repository`, `publishConfig.access=public` for cli/api/dashboard;
    `npm pack --dry-run` checks that bundled output has no workspace references.

@@ -82,6 +82,18 @@ The CLI never imports `@starktech/velo-api`/`velo-dashboard`; it finds their bin
 - Pass `env: process.env` explicitly when spawning (jest gives tests a copy of `process.env`).
 - Tests use `testing/fakeService.mjs` + `useFakeServices()` (real detached processes, temp `VELO_HOME`, free ports).
 
+### Autostart (`packages/cli/lib/autostart/`, `commands/autostart.ts`)
+
+`velo service install|uninstall|status` registers the services with launchd (macOS) or systemd `--user` (Linux); Windows is unsupported by design.
+- **`render.ts`** is pure: `unitNames`, `renderLaunchdPlist`, `renderSystemdUnit`. **`manager.ts`** has the launchd and systemd managers behind an `AutostartManager` interface plus `buildSpec`; all OS access goes through `autostartDeps` (`homedir`, `uid`, `run`, `platform`) so tests can fake it.
+- **Unit names depend on the data directory** (plain for `~/.velo`, a hash of the path otherwise), so a sandbox can never replace or remove the real units. `uninstall`/`start`/`status` only ever address the current directory's units.
+- **launchd agents run a launcher script, not node.** macOS names a login item after the *signer* of the program launchd runs; `node` is signed by the Node.js Foundation, so running it directly shows as "Node.js Foundation". `renderLauncherScript` writes `$VELO_HOME/launchers/velo-<service>` (unsigned `#!/bin/sh`, `exec`s node, mode 755) and the plist's `ProgramArguments` is just that path. It is in `plan().extraFiles`, written before the plist, covered by the `stale` check, and removed by `uninstall`. Verified on real launchd: lifecycle unchanged since `exec` keeps the pid; the display name was chosen by an experiment (script and app-association both worked; a copy of node was not worth it). Don't "simplify" this back to running node directly.
+- **Restart only on failure** (`KeepAlive{SuccessfulExit:false}` / `Restart=on-failure`); otherwise `velo api stop` (SIGTERM, exit 0) would be undone immediately.
+- The API unit passes no host/port (it reads `config.json` each start); the dashboard's args are baked in, hence the `stale` check (`state()` compares the file with a fresh render). Both managers create `run/` first, because neither launchd nor systemd creates a log file's directory.
+- **launchd unloads asynchronously**: `bootout` returns before the job is gone, and a `bootstrap` in that window fails with exit 5 ("Input/output error"). `install`/`uninstall` therefore poll `launchctl print` until the label is gone and retry `bootstrap` on exit 5 (found only by a real install; the fakes now model the lingering). Verified on real launchd: install, crash restart (`kill -9` → restarted), clean stop stays stopped, `start` via kickstart, dashboard waiting for the API, stale detection and reinstall, uninstall.
+- `startService` delegates to the manager (`kickstart` / `systemctl start`) when a unit is installed, instead of spawning a duplicate. `installOne` stops a hand-started copy first and refuses if a foreign program holds the port.
+- **Test isolation is structural**: `lib/testing/setup.ts` (CLI) and `testing/setup.ts` (core, api) give every test file a throwaway `VELO_HOME`, a fake home, and a `run` that throws for real `launchctl`/`systemctl`. Helpers restore these safe defaults rather than deleting `VELO_HOME`. Never write a test that can reach the real home, `~/.velo`, `~/Library/LaunchAgents` or `~/.config/systemd`: a test that times out is torn down while its async work keeps running and then uses the post-teardown environment.
+
 ### API Package (`packages/api/lib/`)
 
 - **`main.ts`** — `velo-api` bin: `--host`/`--port` override `config.api`; SIGTERM/SIGINT close the server and DB. Exits 1 with a clear message on a bad port or `EADDRINUSE`.
@@ -101,6 +113,15 @@ A port of the busybee-x ("chrono") UI; it must keep looking the same. Tailwind v
 - **Server** (`server/`): `velo-dashboard --port <n> --api-url <url>` serves `dist/app` on 127.0.0.1 and `GET /config.json` → `{name:"velo-dashboard", version, pid, apiUrl}` (what the CLI probes). `npm run build` = `vite build` (to `dist/app`) then esbuild (to `dist/main.js`).
 - **Dev**: run the API (`velo api start`), then `npm run dev -w @starktech/velo-dashboard` (Vite on :5173). `/api` is proxied to `VELO_API_URL` (default `http://127.0.0.1:4317`); the proxy strips `Origin` because the API only accepts browser origins from the dashboard's configured port.
 - **Parity check**: when changing UI, compare against the original by running busybee-x against a Postgres with the same data and pixel-diffing screenshots of both (Phase 5 got desktop within ~0.1%).
+
+### Packaging and releases
+
+Published: `@starktech/velo` (cli), `@starktech/velo-api`, `@starktech/velo-dashboard`, always at one version. `@starktech/core` is private and bundled; **it must never appear in a published package's `dependencies`** (it's a devDependency of cli and api).
+- Each published `package.json` has `files: ["dist", "!dist/**/*.map"]`, `engines`, `license`, `repository`, `publishConfig.access: public`, and its own `LICENSE`/`README.md` (the READMEs are what npm shows). Runtime dependencies are exactly the bare imports left in the bundle: cli `commander`, `knex`, `better-sqlite3` (+ optional `pg`), api `express`, `knex`, `better-sqlite3`, dashboard none. When you add an import that esbuild leaves external, add the dependency.
+- Versions: `npm run version:set -- X.Y.Z` (updates root + 3 packages + lockfile); `npm run version:check -- vX.Y.Z` is what the release workflow runs against the tag. Versions are baked into each bundle at build time (`__VERSION__` via esbuild `define`; the CLI no longer reads package.json).
+- **`scripts/smoke-pack.sh`** is the real check that the published shape works: it packs the tarballs, installs them into an empty prefix, and drives the installed commands (including the CLI alone). It also fails on source maps, sources, a missing LICENSE/README, or an unpublishable dependency. Run it after touching any manifest, `files`, esbuild config or an external import; CI runs it too. Don't `git checkout` a manifest to undo an experiment: that discards uncommitted edits (this happened once).
+- Workflows: `.github/workflows/ci.yml` (lint, build, test, `npm audit --omit=dev` on Ubuntu + Node 24 only, and the packaged-install job; `engines` still says `>=22`, which CI does not test) and `release.yml` (tag `v*` → verify → publish api, dashboard, cli with provenance → GitHub release; prereleases go to the `next` dist-tag). Both were checked with `actionlint`. See `docs/releasing.md` for the one-time npm/GitHub setup.
+- **Compatibility rule** (`versionsCompatible` in core): pre-1.0 the minor must match; from 1.0 the major. `velo status` and the dashboard warn when the CLI, API and dashboard disagree, so bump the minor for anything that changes the API or CLI behaviour.
 
 ### Key Conventions
 

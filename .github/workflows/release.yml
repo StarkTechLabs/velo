@@ -1,0 +1,73 @@
+name: Release
+
+# Publishes @starktech/velo, @starktech/velo-api and @starktech/velo-dashboard.
+#
+#   npm run version:set -- 0.2.0 && git commit -am "release 0.2.0"
+#   git tag v0.2.0 && git push --follow-tags
+#
+# See docs/releasing.md. Versions with a "-" (v0.2.0-beta.1) are published under the `next`
+# dist-tag, so `npm install` doesn't pick them up by default.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Tag matches every package version
+        run: node scripts/set-version.mjs --check "$GITHUB_REF_NAME"
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - run: npm audit --omit=dev
+      - run: SKIP_BUILD=1 scripts/smoke-pack.sh
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    # Create this environment in the repository settings to require a reviewer before publishing
+    # and to scope the npm token to releases.
+    environment: npm
+    permissions:
+      contents: write # create the GitHub release
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run build
+      - name: Choose the npm dist-tag
+        id: tag
+        run: |
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then echo "name=next" >> "$GITHUB_OUTPUT"; else echo "name=latest" >> "$GITHUB_OUTPUT"; fi
+      # companions first, so the CLI never points at packages that don't exist yet
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          for pkg in @starktech/velo-api @starktech/velo-dashboard @starktech/velo; do
+            npm publish -w "$pkg" --provenance --access public --tag "$DIST_TAG"
+          done
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=(--generate-notes --verify-tag)
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}"

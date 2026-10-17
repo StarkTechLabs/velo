@@ -1,17 +1,39 @@
 {
   "name": "@starktech/velo-dashboard",
-  "description": "Web dashboard for velo time tracking",
   "version": "0.1.0",
-  "type": "module",
+  "description": "Web dashboard for velo time tracking (optional companion to @starktech/velo; needs @starktech/velo-api).",
+  "keywords": [
+    "velo",
+    "starktech",
+    "time",
+    "tracking",
+    "dashboard",
+    "react"
+  ],
   "license": "MIT",
+  "author": "starktechlabs",
+  "homepage": "https://github.com/starktechlabs/velo#readme",
+  "bugs": {
+    "url": "https://github.com/starktechlabs/velo/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/starktechlabs/velo.git",
+    "directory": "packages/dashboard"
+  },
+  "type": "module",
   "bin": {
     "velo-dashboard": "dist/main.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.map"
   ],
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "dev": "vite",

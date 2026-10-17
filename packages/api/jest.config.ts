@@ -2,6 +2,7 @@
 export default {
   testEnvironment: "node",
   watchman: false,
+  setupFiles: ["<rootDir>/lib/testing/setup.ts"],
   transform: {
     "^.+\\.[tj]sx?$": [
       "ts-jest",

@@ -1,6 +1,7 @@
 import { Config } from "@starktech/core"
 import { Command } from "commander"
 
+import { autostartCommand } from "./autostart"
 import { configureCommand } from "./configure"
 import { editCommand } from "./edit"
 import { exportCommand } from "./export"
@@ -25,4 +26,5 @@ export const registerCommands = (program: Command, config: Config) => {
   exportCommand.register(program, config)
   importCommand.register(program, config)
   servicesCommand.register(program, config)
+  autostartCommand.register(program, config)
 }

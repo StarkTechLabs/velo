@@ -5,21 +5,11 @@
     "moduleResolution": "bundler",
     "rootDir": "./lib",
     "outDir": "./dist",
-    "types": [
-      "node",
-      "jest"
-    ],
+    "types": ["node", "jest"],
     "paths": {
-      "@/*": [
-        "./lib/*"
-      ]
+      "@/*": ["./lib/*"]
     }
   },
-  "include": [
-    "lib/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "include": ["lib/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

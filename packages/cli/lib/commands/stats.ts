@@ -8,7 +8,8 @@ import {
 } from "@starktech/core"
 import { Command } from "commander"
 
-import { printJson } from "@/format"
+import { printJson, renderTable } from "@/format"
+import { addFilterOptions, filterFromOptions } from "@/options"
 import { CommandRegistration } from "@/types"
 
 function formatTime(isoString: string): string {
@@ -22,6 +23,28 @@ function formatTime(isoString: string): string {
 export const statsCommand: CommandRegistration = {
   register(program: Command, _config: Config) {
     const stats = program.command("stats").description("View time tracking statistics.")
+
+    const summary = stats
+      .command("summary")
+      .description("Totals for any period: overall, by project, and by day.")
+      .option("--json", "Output JSON")
+    addFilterOptions(summary).action(async (options) => {
+      const result = await getStats(filterFromOptions(options))
+      if (options.json) return printJson(result)
+      if (result.eventCount === 0) return console.log("No events found.")
+
+      const hours = (minutes: number) => (minutes / 60).toFixed(2)
+      const days = result.byDay.length
+      console.log(
+        `Total  ${hours(result.totalMinutes)}h  (${result.eventCount} ${result.eventCount === 1 ? "event" : "events"} over ${days} ${days === 1 ? "day" : "days"})\n`,
+      )
+      console.log(
+        renderTable(
+          ["PROJECT", "HOURS", "EVENTS"],
+          result.byProject.map((p) => [p.project, hours(p.minutes), String(p.eventCount)]),
+        ),
+      )
+    })
 
     stats
       .command("today")

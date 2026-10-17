@@ -1,6 +1,7 @@
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 export default {
   testEnvironment: "node",
+  setupFiles: ["<rootDir>/lib/testing/setup.ts"],
   watchman: false,
   transform: {
     "^.+\\.[tj]sx?$": [

@@ -12,6 +12,8 @@ How to build, run, and test velo from a checkout. For architecture and code conv
   - [Dashboard](#dashboard)
   - [Everything, the way a user runs it](#everything-the-way-a-user-runs-it)
   - [A typical development session](#a-typical-development-session)
+- [Autostart (login items)](#autostart-login-items)
+- [Packaging and releasing](#packaging-and-releasing)
 - [Sample data](#sample-data)
 - [Tests, lint, formatting](#tests-lint-formatting)
 - [Ports and configuration](#ports-and-configuration)
@@ -205,6 +207,98 @@ Four terminals, each with `. scripts/dev-env.sh`:
 If you are only touching core or the CLI, you don't need the API or dashboard at all; run
 `npm test -w @starktech/core` and use `velo` directly.
 
+## Autostart (login items)
+
+`velo service install` makes the API and dashboard start when you log in: a launchd LaunchAgent
+on macOS, a systemd user unit on Linux. Users run it once; for development you mostly need to
+know how it behaves and how to test it without disturbing your own setup.
+
+```bash
+velo service install [api|dashboard|all]    # writes the unit, activates it, starts the service now
+velo service install --dry-run               # print the files and commands; change nothing
+velo service status                          # per service: enabled / stale / not installed, and running now
+velo service uninstall [api|dashboard|all]   # deactivates (which stops the service) and deletes the unit
+```
+
+How it works, in the places you'll look:
+
+|                | macOS (launchd)                                                                                                 | Linux (systemd)                                                             |
+| -------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Unit file      | `~/Library/LaunchAgents/dev.starktech.velo.<service>.plist`                                                     | `~/.config/systemd/user/velo-<service>.service` (honours `XDG_CONFIG_HOME`) |
+| Activated with | `launchctl bootstrap gui/$UID <plist>` (after a `bootout`)                                                      | `systemctl --user enable --now` (then `restart`)                            |
+| Runs           | `$VELO_HOME/launchers/velo-<service>`, a small script that `exec`s node (so the login item is named `velo-api`) | `node <script>` directly                                                    |
+| Restart policy | `KeepAlive {SuccessfulExit: false}`                                                                             | `Restart=on-failure`                                                        |
+| Logs           | `$VELO_HOME/run/<service>.log` (same file `velo <service> logs` reads)                                          | same                                                                        |
+
+- **The login item is named after a launcher, not node.** macOS lists a login item (System Settings →
+  General → Login Items & Extensions) under the name of the _signer_ of the program launchd runs, and
+  the `node` binary is signed by the Node.js Foundation, so running it directly shows up as
+  "Node.js Foundation". Each agent therefore runs `~/.velo/launchers/velo-api` /
+  `velo-dashboard`, an unsigned `#!/bin/sh` script that immediately `exec`s node (same pid, so
+  launchd's tracking, `KeepAlive` and `velo status` are unaffected), and macOS shows the script's
+  name. The script is rewritten on every `velo service install`, is part of the `stale` check, and is
+  removed by `uninstall`. This was chosen by experiment: a script showed its own name, a script
+  associated with a stub `.app` via `AssociatedBundleIdentifiers` also worked but needs an app
+  bundle, and a signed copy of node was not worth shipping. (Process listings still show `node`;
+  only the Login Items entry is renamed.) Linux is unaffected: systemd shows the unit name.
+- **A crash restarts it; a clean stop does not.** `velo api stop` sends SIGTERM, the process exits
+  0, and the service manager leaves it stopped until the next login or `velo api start`. Once a
+  unit is installed, `velo api start` asks launchd/systemd to start it instead of spawning a second,
+  unmanaged copy (the output says `by launchd` / `by systemd`).
+- **Units are named for the data directory.** The real `~/.velo` gets the plain names above. Any
+  other `VELO_HOME` (your sandbox) gets a short hash in the name (`dev.starktech.velo.edb549e1.api`,
+  `velo-edb549e1-api.service`), so installing from the sandbox can never replace or remove your real
+  login items, and `uninstall` only ever touches the current data directory's units.
+- **The dashboard waits for the API.** Its unit passes `--wait-for-api 60`: it polls
+  `/api/health` for up to a minute at login, then starts anyway (the page shows a banner if the API
+  is still down). systemd also orders it `After=`/`Wants=` the API unit; launchd has no ordering.
+- **What goes stale.** The API reads its host and port from `config.json` on every start, so its
+  unit never goes stale. The dashboard doesn't read config, so its ports are written into its unit;
+  after `velo configure --dashboard-port …` (or a different Node, or a moved install) run
+  `velo service install` again. `velo service status` shows `stale` when the file on disk no longer
+  matches what would be written now.
+- **Absolute paths.** The unit records the node binary that ran `velo service install` and the
+  resolved script of each service, because nothing at login has your shell's `PATH`. If you switch
+  Node versions with nvm, reinstall.
+- **Linux boot vs login.** User units start at _login_. To start them at boot run
+  `sudo loginctl enable-linger $USER` once.
+
+### Testing autostart safely
+
+The automated tests never touch your real login items. Every CLI test file starts with a throwaway
+`VELO_HOME`, a fake home directory, and a service-manager runner that **throws** if anything tries to
+run the real `launchctl`/`systemctl` (`packages/cli/lib/testing/setup.ts`). Tests that need a manager
+use a fake that parses the generated plist or unit and spawns _exactly_ the command line it
+specifies (`useFakeServiceManager` in `lib/testing/autostart.ts`), so the real generated arguments
+are exercised. Keep it that way: a test that times out is torn down while its async work is still
+running, and that work will happily write to whatever the environment looks like afterwards.
+
+What the fakes can't tell you, check with the real tools (these install nothing):
+
+```bash
+velo service install --dry-run     # read the plist / unit and the commands it would run
+plutil -lint file.plist            # macOS: validate a generated plist
+systemd-analyze verify velo-api.service velo-dashboard.service   # Linux: units in /etc/systemd/system
+```
+
+Real launchd behaves differently from any fake in ways that matter (for example `bootout` returns
+before the job is actually unloaded), so after changing `autostart/manager.ts` do a real install from
+the sandbox, as below, and exercise the unhappy paths: `kill -9` the service (launchd should restart
+it), `velo api stop` (it should stay stopped), and change a port then reinstall.
+
+To try a real install end to end from the sandbox (it uses hashed labels, so it can't touch a real
+setup), then remove it:
+
+```bash
+. scripts/dev-env.sh
+velo service install        # services start now, and at every login from now on
+velo service status
+velo service uninstall      # always clean up after yourself
+```
+
+On macOS, `launchctl list | grep dev.starktech.velo` shows what is loaded. On Linux,
+`systemctl --user status 'velo-*'` and `journalctl --user -u 'velo-*'`.
+
 ## Sample data
 
 An empty dashboard isn't much to look at. Generate three weeks of plausible events and import
@@ -227,6 +321,22 @@ velo import postgres postgres://user:pass@host:5432/busybee --user-id <id> --dry
 `velo import csv` also reads CSV exported by `velo export` and by the old busybee-x UI. Note the
 CSV format is lossy (events are grouped per day, project and description, and placed at noon);
 the Postgres import keeps exact timestamps.
+
+## Packaging and releasing
+
+The three published packages are checked the way a user receives them:
+
+```bash
+scripts/smoke-pack.sh                  # build, pack, install the tarballs into an empty prefix, drive the installed commands
+SKIP_BUILD=1 scripts/smoke-pack.sh     # reuse the existing dist/ folders
+npm pack --dry-run -w @starktech/velo  # list what would be published
+```
+
+It needs network access (npm installs the packages' dependencies) and uses a temp data directory and
+free ports; it never touches your `~/.velo` or default ports. Run it after changing a `package.json`,
+the `files` list, an esbuild config, or adding an import that stays external in a bundle (that
+becomes a runtime dependency). Version numbers and the release procedure are in
+[releasing.md](releasing.md); `npm run version:set -- X.Y.Z` keeps the packages in step.
 
 ## Tests, lint, formatting
 
@@ -334,4 +444,8 @@ VELO_ALLOWED_ORIGINS=http://localhost:5173 node packages/api/dist/main.js
 | An error loading `better-sqlite3` (mentions a bindings file or `NODE_MODULE_VERSION`) | The native module was built for a different Node version. Run `npm rebuild better-sqlite3` (or `npm ci`) after switching Node versions.                                                                       |
 | Tests hang or are very slow to start                                                  | Make sure you're using the repo's jest configs (`watchman: false`); run per package with `npm test -w …`, not bare `jest` at the root.                                                                        |
 | Stale `velo` behaviour after pulling                                                  | Rebuild: `npm run build`. The `velo` helper runs `dist/`, not the sources.                                                                                                                                    |
+| `velo service status` says `stale`                                                    | The unit on disk differs from what would be written now (ports changed, different Node, moved install). `velo service install` rewrites it.                                                                   |
+| `launchctl bootstrap failed … Input/output error`                                     | Usually a stale or broken agent. `velo service uninstall`, then install again. Not possible over ssh without a GUI login session.                                                                             |
+| `no systemd user session`                                                             | You're in a shell with no user bus (ssh without lingering, a container). Log in normally or `loginctl enable-linger $USER`; otherwise use `velo start`.                                                       |
+| Autostart installed but "not answering yet"                                           | Read its log: `velo api logs`. A port held by something else makes launchd/systemd retry in a loop; free the port or `velo configure` another.                                                                |
 | Want a clean slate                                                                    | `velo stop; rm -rf .velo-dev`. For build output too: `rm -rf packages/*/dist`.                                                                                                                                |

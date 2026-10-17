@@ -4,6 +4,7 @@ import {
   errorText,
   fetchCsv,
   fetchEvents,
+  fetchHealth,
   fetchProjects,
   saveEvent,
   setApiBase,
@@ -60,6 +61,14 @@ describe("fetchEvents", () => {
     fetchMock.mockReturnValue(respond(["a"]))
     expect(await fetchProjects()).toEqual(["a"])
     expect(fetchMock.mock.calls[0][0]).toBe("http://127.0.0.1:4317/api/projects")
+  })
+})
+
+describe("fetchHealth", () => {
+  it("reads the API's identity and version", async () => {
+    fetchMock.mockReturnValue(respond({ name: "velo-api", version: "0.1.2", pid: 1 }))
+    expect(await fetchHealth()).toMatchObject({ name: "velo-api", version: "0.1.2" })
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/health")
   })
 })
 

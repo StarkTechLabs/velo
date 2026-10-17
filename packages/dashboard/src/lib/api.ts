@@ -68,6 +68,10 @@ const toParams = (query: EventQuery): URLSearchParams => {
 export const fetchEvents = (query: EventQuery): Promise<Page<WorkEvent>> =>
   request(`/api/events?${toParams(query)}`)
 
+export type Health = { name: string; version: string; pid: number; home?: string | null }
+
+export const fetchHealth = (): Promise<Health> => request("/api/health")
+
 export const fetchProjects = (): Promise<string[]> => request("/api/projects")
 
 export type EventInput = {

@@ -1,17 +1,40 @@
 {
   "name": "@starktech/velo-api",
-  "description": "Local REST API for velo time tracking",
   "version": "0.1.0",
-  "type": "module",
+  "description": "Local REST API for velo time tracking (optional companion to @starktech/velo).",
+  "keywords": [
+    "velo",
+    "starktech",
+    "time",
+    "tracking",
+    "api",
+    "express",
+    "sqlite"
+  ],
   "license": "MIT",
+  "author": "starktechlabs",
+  "homepage": "https://github.com/starktechlabs/velo#readme",
+  "bugs": {
+    "url": "https://github.com/starktechlabs/velo/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/starktechlabs/velo.git",
+    "directory": "packages/api"
+  },
+  "type": "module",
   "bin": {
     "velo-api": "dist/main.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.map"
   ],
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "node esbuild.config.js",

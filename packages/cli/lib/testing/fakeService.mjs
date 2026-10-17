@@ -6,7 +6,8 @@ import { setInterval } from "node:timers"
 
 const args = process.argv.slice(2)
 const arg = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined)
-const port = Number(arg("--port"))
+// like the real API, which reads its port from config.json when it isn't given one
+const port = Number(arg("--port") ?? process.env.FAKE_API_PORT)
 const mode = process.env.FAKE_MODE ?? ""
 
 if (mode === "exit") {

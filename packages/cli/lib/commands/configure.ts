@@ -1,6 +1,8 @@
 import { Config, configSchema, writeConfig } from "@starktech/core"
 import { Command } from "commander"
 
+import { SERVICE_ORDER } from "@/services/definitions"
+import { serviceDeps } from "@/services/manage"
 import { CommandRegistration } from "@/types"
 
 export const configureCommand: CommandRegistration = {
@@ -38,6 +40,10 @@ export const configureCommand: CommandRegistration = {
         writeConfig(next)
         console.log(JSON.stringify(next, null, 2))
         console.log("\nRestart running services to apply: velo stop && velo start")
+        const manager = serviceDeps.autostart()
+        if (manager && SERVICE_ORDER.some((name) => manager.isInstalled(name))) {
+          console.log("Autostart is set up: run `velo service install` so the login units match.")
+        }
       })
   },
 }

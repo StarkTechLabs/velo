@@ -3,6 +3,9 @@ import * as fs from "node:fs"
 
 import { Config } from "@starktech/core"
 
+import { AutostartManager, getManager } from "@/autostart/manager"
+import { VERSION } from "@/version"
+
 import { SERVICES, SERVICE_ORDER, ServiceDef, ServiceName } from "./definitions"
 import { isAlive, logFile, openLog, readPid, removePid, tailFile, writePid } from "./files"
 import { Probe, probe } from "./probe"
@@ -11,6 +14,10 @@ import { NotInstalledError, resolveBin } from "./resolve"
 /** Seams the tests replace. */
 export const serviceDeps = {
   resolveBin,
+  /** This CLI's version, for the cross-package compatibility warning. */
+  cliVersion: () => VERSION,
+  /** The OS service manager (launchd/systemd), or null where autostart isn't supported. */
+  autostart: (): AutostartManager | null => getManager(),
   startTimeoutMs: 10_000,
   stopTimeoutMs: 5_000,
 }
@@ -68,7 +75,28 @@ const startupFailure = (def: ServiceDef, headline: string): Error => {
   return new Error(`${headline}${lines}\nFull log: velo ${def.name} logs`)
 }
 
-export type StartResult = { status: "started" | "already-running"; pid: number; url: string }
+export type StartResult = {
+  status: "started" | "already-running"
+  pid: number
+  url: string
+  /** Set when the OS service manager (rather than this process) started it. */
+  via?: AutostartManager["kind"]
+}
+
+/** Waits for a service to answer its probe; returns its pid, or null on timeout. */
+export const waitUntilRunning = async (
+  def: ServiceDef,
+  config: Config,
+  timeoutMs: number,
+): Promise<number | null> => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const result = await probe(def, config, 500)
+    if (result.state === "running") return result.info.pid
+    await sleep(100)
+  }
+  return null
+}
 
 /** Starts a service unless it's already up, and waits until it reports healthy. */
 export const startService = async (name: ServiceName, config: Config): Promise<StartResult> => {
@@ -82,6 +110,21 @@ export const startService = async (name: ServiceName, config: Config): Promise<S
       `Cannot start the ${def.label}: port ${def.port(config)} is in use by another program ` +
         `(${current.detail}).\nPick another port with: velo configure --${name}-port <port>`,
     )
+  }
+
+  // Set up for autostart? Then the OS service manager owns this service: ask it to start it
+  // rather than spawning a second, unmanaged copy next to it.
+  const manager = serviceDeps.autostart()
+  if (manager?.isInstalled(name)) {
+    await manager.start(name)
+    const pid = await waitUntilRunning(def, config, serviceDeps.startTimeoutMs)
+    if (pid === null) {
+      throw startupFailure(
+        def,
+        `${manager.kind} started the ${def.label}, but it did not become healthy within ${Math.round(serviceDeps.startTimeoutMs / 1000)}s.`,
+      )
+    }
+    return { status: "started", pid, url: def.url(config), via: manager.kind }
   }
 
   const script = serviceDeps.resolveBin(def)

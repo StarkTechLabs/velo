@@ -1,10 +1,40 @@
 {
   "name": "@starktech/velo",
-  "description": "CLI for velo",
   "version": "0.1.0",
+  "description": "Time tracking from the terminal: log work, see where the day went, run the optional velo API and dashboard.",
+  "keywords": [
+    "velo",
+    "starktech",
+    "time",
+    "tracking",
+    "cli",
+    "timesheet",
+    "sqlite"
+  ],
+  "license": "MIT",
+  "author": "starktechlabs",
+  "homepage": "https://github.com/starktechlabs/velo#readme",
+  "bugs": {
+    "url": "https://github.com/starktechlabs/velo/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/starktechlabs/velo.git",
+    "directory": "packages/cli"
+  },
   "type": "module",
   "bin": {
     "velo": "dist/main.js"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.map"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "node esbuild.config.js",
@@ -15,17 +45,20 @@
     "lint:fix": "eslint . --fix",
     "test": "jest --passWithNoTests"
   },
-  "devDependencies": {
-    "@types/node": "^25.3.5",
-    "@types/pg": "^8.23.1",
-    "esbuild": "^0.28.2",
-    "typescript": "^5.0.0"
-  },
   "dependencies": {
-    "@starktech/core": "*",
-    "commander": "^15.0.0"
+    "better-sqlite3": "^13.0.3",
+    "commander": "^15.0.0",
+    "knex": "^3.3.0"
   },
   "optionalDependencies": {
     "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@starktech/core": "*",
+    "@types/node": "^25.3.5",
+    "@types/pg": "^8.23.1",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.0.0",
+    "zod": "^4.6.7"
   }
 }

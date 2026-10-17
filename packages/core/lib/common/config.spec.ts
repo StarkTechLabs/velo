@@ -19,7 +19,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  delete process.env.VELO_HOME
+  process.env.VELO_HOME = process.env.VELO_TEST_SAFE_HOME // never leave it unset
   fs.rmSync(home, { recursive: true, force: true })
 })
 
