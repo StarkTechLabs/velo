@@ -53,7 +53,7 @@
   "devDependencies": {
     "@starktech/core": "*",
     "@types/express": "^5.0.6",
-    "@types/node": "^25.9.9",
+    "@types/node": "^26.6.5",
     "@types/supertest": "^7.2.1",
     "esbuild": "^0.28.2",
     "supertest": "^7.3.1",
