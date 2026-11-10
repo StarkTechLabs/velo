@@ -13,13 +13,13 @@
   ],
   "license": "MIT",
   "author": "starktechlabs",
-  "homepage": "https://github.com/starktechlabs/velo#readme",
+  "homepage": "https://github.com/StarkTechLabs/velo#readme",
   "bugs": {
-    "url": "https://github.com/starktechlabs/velo/issues"
+    "url": "https://github.com/StarkTechLabs/velo/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/starktechlabs/velo.git",
+    "url": "git+https://github.com/StarkTechLabs/velo.git",
     "directory": "packages/api"
   },
   "type": "module",
