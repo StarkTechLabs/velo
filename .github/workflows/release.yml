@@ -3,7 +3,7 @@ name: Release
 # Publishes @starktech/velo, @starktech/velo-api and @starktech/velo-dashboard.
 #
 #   npm run version:set -- 0.2.0 && git commit -am "release 0.2.0"
-#   git tag v0.2.0 && git push --follow-tags
+#   git tag v0.2.0 && git push origin main v0.2.0
 #
 # See docs/releasing.md. Versions with a "-" (v0.2.0-beta.1) are published under the `next`
 # dist-tag, so `npm install` doesn't pick them up by default.
@@ -36,8 +36,8 @@ jobs:
   publish:
     needs: verify
     runs-on: ubuntu-latest
-    # Create this environment in the repository settings to require a reviewer before publishing
-    # and to scope the npm token to releases.
+    # Create this environment in the repository settings to require a reviewer before publishing.
+    # npm's trusted publisher config names it, so only this job can publish.
     environment: npm
     permissions:
       contents: write # create the GitHub release
