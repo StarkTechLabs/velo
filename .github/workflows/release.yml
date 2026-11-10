@@ -47,7 +47,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run build
@@ -58,11 +57,10 @@ jobs:
       # companions first, so the CLI never points at packages that don't exist yet
       - name: Publish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DIST_TAG: ${{ steps.tag.outputs.name }}
         run: |
           for pkg in @starktech/velo-api @starktech/velo-dashboard @starktech/velo; do
-            npm publish -w "$pkg" --provenance --access public --tag "$DIST_TAG"
+            npm publish -w "$pkg" --access public --tag "$DIST_TAG"
           done
       - name: GitHub release
         env:
