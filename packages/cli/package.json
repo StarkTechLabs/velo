@@ -1,6 +1,6 @@
 {
   "name": "@starktech/velo",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Time tracking from the terminal: log work, see where the day went, run the optional velo API and dashboard.",
   "keywords": [
     "velo",

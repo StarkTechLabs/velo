@@ -1,6 +1,6 @@
 {
   "name": "@starktech/velo-api",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Local REST API for velo time tracking (optional companion to @starktech/velo).",
   "keywords": [
     "velo",
