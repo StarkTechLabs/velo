@@ -1,6 +1,6 @@
 {
   "name": "@starktech/velo-dashboard",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Web dashboard for velo time tracking (optional companion to @starktech/velo; needs @starktech/velo-api).",
   "keywords": [
     "velo",
