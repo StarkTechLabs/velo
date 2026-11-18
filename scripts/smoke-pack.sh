@@ -114,6 +114,8 @@ npm install -g --prefix "$alone" --no-audit --no-fund "$work/tarballs/starktech-
   || fail "npm install -g of the cli alone" "$(tail -20 "$work/install2.log")"
 export VELO_HOME="$work/home-alone"
 check "cli alone: velo init" "initialized" "$alone/bin/velo" init
+api_port="$(free_port)"; dash_port="$(free_port)"
+check "cli alone: velo configure (own ports)" "$api_port" "$alone/bin/velo" configure --api-port "$api_port" --dashboard-port "$dash_port"
 check "cli alone: velo log" "alone" "$alone/bin/velo" log smoke 5m alone
 bin="$alone/bin"
 out="$("$alone/bin/velo" api start 2>&1 || true)"
