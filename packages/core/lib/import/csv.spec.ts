@@ -1,4 +1,3 @@
-import { busybeeRowToEvent } from "./busybee"
 import { csvToEvents, parseCsv } from "./csv"
 import { eventsToCsv } from "../common/group"
 import { WorkEvent } from "../types"
@@ -90,43 +89,5 @@ describe("csvToEvents", () => {
     expect(csvToEvents("﻿date,project,description,hours\n").format).toBe("velo")
     expect(() => csvToEvents("a,b\n1,2")).toThrow("Unrecognized CSV header")
     expect(() => csvToEvents("")).toThrow("empty")
-  })
-})
-
-describe("busybeeRowToEvent", () => {
-  const base = {
-    id: "id-1",
-    timestamp: new Date("2025-05-05T10:00:00Z"),
-    project: "p",
-    description: "d",
-  }
-
-  it("uses the jsonb input when valid, as object or string", () => {
-    expect(
-      busybeeRowToEvent({ ...base, timeframe: { input: "1.5h", durationInMinutes: 90 } }),
-    ).toEqual({
-      id: "id-1",
-      timestamp: "2025-05-05T10:00:00.000Z",
-      timeframe: "1.5h",
-      project: "p",
-      description: "d",
-    })
-    expect(busybeeRowToEvent({ ...base, timeframe: '{"input":"2d"}' }).timeframe).toBe("2d")
-    expect(busybeeRowToEvent({ ...base, timeframe: "30m" }).timeframe).toBe("30m")
-  })
-
-  it("falls back to durationInMinutes and null-safes text columns", () => {
-    const event = busybeeRowToEvent({
-      ...base,
-      timestamp: "2025-05-05T10:00:00Z",
-      project: null,
-      description: null,
-      timeframe: { input: "garbage", durationInMinutes: 45 },
-    })
-    expect(event).toMatchObject({ timeframe: "45m", project: "", description: "" })
-  })
-
-  it("throws for an unreadable timeframe", () => {
-    expect(() => busybeeRowToEvent({ ...base, timeframe: null })).toThrow("Unreadable timeframe")
   })
 })

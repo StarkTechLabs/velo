@@ -163,7 +163,7 @@ grouped events table, edit sheet).
 
 **Exit:** after reboot/login both come up, `velo status` shows them healthy.
 
-## Phase 7: Publishing, CI, docs (implemented; see `docs/releasing.md` and `docs/migrating-from-busybee.md`)
+## Phase 7: Publishing, CI, docs (implemented; see `docs/releasing.md`)
 
 1. `files`, `bin`, `exports`, `engines`, `repository`, `publishConfig.access=public` for cli/api/dashboard;
    `npm pack --dry-run` checks that bundled output has no workspace references.

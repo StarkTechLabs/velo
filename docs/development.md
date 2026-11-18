@@ -315,12 +315,10 @@ second time. Other ways to get data in:
 ```bash
 velo log velo 90m "wrote the dev guide"                 # one event, now
 velo log velo 1h "yesterday" --timestamp 2026-10-15T14:00:00Z
-velo import postgres postgres://user:pass@host:5432/busybee --user-id <id> --dry-run
 ```
 
 `velo import csv` also reads CSV exported by `velo export` and by the old busybee-x UI. Note the
-CSV format is lossy (events are grouped per day, project and description, and placed at noon);
-the Postgres import keeps exact timestamps.
+CSV format is lossy (events are grouped per day, project and description, and placed at noon).
 
 ## Packaging and releasing
 

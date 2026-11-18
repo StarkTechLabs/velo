@@ -33,7 +33,6 @@ Time is written as a number and a unit: `15m`, `1.5h`, `2d` (a day counts as 24 
 | `velo projects`                           | Projects you have logged time against                                                                                  |
 | `velo export`                             | CSV (grouped by day, project and description) or `-f json`, to stdout or `-o file`; takes the same filters as `list`   |
 | `velo import csv <file>`                  | Import a CSV from `velo export`, the old busybee-x export, or the Busywork Slack log (`--dry-run`)                     |
-| `velo import postgres [url]`              | Import from a busybee-x Postgres database (`--user-id`, `--dry-run`)                                                   |
 | `velo configure`                          | Show or change settings: `--api-host`, `--api-port`, `--dashboard-port`                                                |
 
 Run `velo <command> --help` for details. Anything that prints a list takes `--json`.

@@ -34,10 +34,6 @@ velo service install           # start them at login (macOS and Linux)
 
 See the [CLI README](packages/cli/README.md) for every command.
 
-## Migrating from busybee-x
-
-See [docs/migrating-from-busybee.md](docs/migrating-from-busybee.md).
-
 ## Contributing
 
 Building from source, running the pieces locally, tests, and releasing:

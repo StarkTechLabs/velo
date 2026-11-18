@@ -57,7 +57,7 @@ Single-user. The service layer below is the one API surface the CLI (and later t
 - **`migrations/`** — Embedded knex migrations (no migration files on disk). Add new ones to `MIGRATIONS` + `MIGRATION_MAP`.
 - **`data/workEvent.ts`** — `createEvent`, `getEvent`, `listEvents` (term/project/date filters, pagination), `updateEvent`, `deleteEvent` (soft delete), `listProjects`. Inputs are validated by the zod schemas, so callers may pass raw input.
 - **`data/stats.ts`** — `getStats(filter)`: totals, by project, by local day.
-- **`data/import.ts`, `import/`** — `importEvents` (bulk, idempotent by id, dry-run), `csvToEvents` (velo/busybee-x export and legacy Busywork log formats; content-derived ids), `busybeeRowToEvent`.
+- **`data/import.ts`, `import/`** — `importEvents` (bulk, idempotent by id, dry-run), `csvToEvents` (velo/busybee-x export and legacy Busywork log formats; content-derived ids).
 - **`common/group.ts`** — Pure helpers `groupEvents` and `eventsToCsv` (no node imports, safe for the browser).
 - **`common/utils.ts`, `dates.ts`, `uuid.ts`, `errors.ts`** — Timeframe parsing/formatting, date helpers, UUID v7 (`crypto`-based, no dependency), `errorMessage`.
 - **`testing/memoryDb.ts`** — In-memory migrated SQLite for specs.
@@ -66,9 +66,8 @@ Single-user. The service layer below is the one API surface the CLI (and later t
 ### CLI Package (`packages/cli/lib/`)
 
 - **`main.ts`** — Commander.js program entry point.
-- **`commands/`** — One file per command: `init`, `configure` (`--api-host/--api-port/--dashboard-port`), `log`, `list`, `edit`, `rm`, `stats`, `projects`, `export`, `import` (`csv`, `postgres`), and `services.ts`: `status`, `start`, `stop`, `open`, plus `api|dashboard start|stop|restart|status|logs`. `format.ts`/`options.ts`/`prompt.ts` hold shared output, filter flags and confirmation. Commands throw; `main.ts` prints `error: <message>` and exits 1 (`VELO_DEBUG=1` for stack traces). `rm`/`edit` accept the full id or the trailing characters shown in `velo list`.
+- **`commands/`** — One file per command: `init`, `configure` (`--api-host/--api-port/--dashboard-port`), `log`, `list`, `edit`, `rm`, `stats`, `projects`, `export`, `import csv`, and `services.ts`: `status`, `start`, `stop`, `open`, plus `api|dashboard start|stop|restart|status|logs`. `format.ts`/`options.ts`/`prompt.ts` hold shared output, filter flags and confirmation. Commands throw; `main.ts` prints `error: <message>` and exits 1 (`VELO_DEBUG=1` for stack traces). `rm`/`edit` accept the full id or the trailing characters shown in `velo list`.
 - Tests run the real commands in-process against an in-memory DB (`lib/testing/run.ts`). `commander` is ESM-only, so `jest.config.ts` transforms it.
-- `pg` is an optional dependency, loaded lazily by `import postgres` only.
 - The CLI builds to `dist/main.js` via esbuild (ESM, Node 22 target, `commander` externalized).
 
 ### Managing the optional services (`packages/cli/lib/services/`)
@@ -117,7 +116,7 @@ A port of the busybee-x ("chrono") UI; it must keep looking the same. Tailwind v
 ### Packaging and releases
 
 Published: `@starktech/velo` (cli), `@starktech/velo-api`, `@starktech/velo-dashboard`, always at one version. `@starktech/core` is private and bundled; **it must never appear in a published package's `dependencies`** (it's a devDependency of cli and api).
-- Each published `package.json` has `files: ["dist", "!dist/**/*.map"]`, `engines`, `license`, `repository`, `publishConfig.access: public`, and its own `LICENSE`/`README.md` (the READMEs are what npm shows). Runtime dependencies are exactly the bare imports left in the bundle: cli `commander`, `knex`, `better-sqlite3` (+ optional `pg`), api `express`, `knex`, `better-sqlite3`, dashboard none. When you add an import that esbuild leaves external, add the dependency.
+- Each published `package.json` has `files: ["dist", "!dist/**/*.map"]`, `engines`, `license`, `repository`, `publishConfig.access: public`, and its own `LICENSE`/`README.md` (the READMEs are what npm shows). Runtime dependencies are exactly the bare imports left in the bundle: cli `commander`, `knex`, `better-sqlite3`, api `express`, `knex`, `better-sqlite3`, dashboard none. When you add an import that esbuild leaves external, add the dependency.
 - Versions: `npm run version:set -- X.Y.Z` (updates root + 3 packages + lockfile); `npm run version:check -- vX.Y.Z` is what the release workflow runs against the tag. Versions are baked into each bundle at build time (`__VERSION__` via esbuild `define`; the CLI no longer reads package.json).
 - **`scripts/smoke-pack.sh`** is the real check that the published shape works: it packs the tarballs, installs them into an empty prefix, and drives the installed commands (including the CLI alone). It also fails on source maps, sources, a missing LICENSE/README, or an unpublishable dependency. Run it after touching any manifest, `files`, esbuild config or an external import; CI runs it too. Don't `git checkout` a manifest to undo an experiment: that discards uncommitted edits (this happened once).
 - Workflows: `.github/workflows/ci.yml` (lint, build, test, `npm audit --omit=dev` on Ubuntu + Node 24 only, and the packaged-install job; `engines` still says `>=22`, which CI does not test) and `release.yml` (tag `v*` → verify → publish api, dashboard, cli with provenance → GitHub release; prereleases go to the `next` dist-tag). Both were checked with `actionlint`. See `docs/releasing.md` for the one-time npm/GitHub setup.
