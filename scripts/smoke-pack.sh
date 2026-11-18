@@ -85,7 +85,6 @@ check "velo log" "smoke test" "$bin/velo" log smoke 45m "smoke test"
 check "velo list" "smoke" "$bin/velo" list
 check "velo export csv header" "date,project,description,hours" "$bin/velo" export
 check "velo stats today" "smoke" "$bin/velo" stats today
-if [ -d "$prefix/lib/node_modules/@starktech/velo/node_modules/pg" ]; then ok "optional pg is installed (for velo import postgres)"; fi
 
 echo "== api + dashboard, found next to the cli"
 check "velo start" "Dashboard started" "$bin/velo" start

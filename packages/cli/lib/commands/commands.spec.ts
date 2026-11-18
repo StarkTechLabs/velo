@@ -222,12 +222,4 @@ describe("export and import", () => {
     expect(out).toBe("Imported 1 events, 0 already present")
     expect(err).toContain('line 3: Invalid date "nope"')
   })
-
-  it("requires a postgres url", async () => {
-    const saved = process.env.DATABASE_URL
-    delete process.env.DATABASE_URL
-    const { failure } = await runCli(["import", "postgres"])
-    expect(failure?.message).toContain("DATABASE_URL")
-    if (saved) process.env.DATABASE_URL = saved
-  })
 })

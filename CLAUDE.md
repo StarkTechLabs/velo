@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Velo is a time tracking CLI tool. It is an npm workspace monorepo with these packages:
+Velo is a local, single-user time tracking CLI with an optional REST API and web dashboard. It is an npm workspace monorepo with these packages:
 - `packages/core` (`@starktech/core`) — business logic, database, and data layer (private; bundled into the others)
 - `packages/cli` (`@starktech/velo`) — CLI application using Commander.js
 - `packages/api` (`@starktech/velo-api`) — optional local Express REST API
@@ -31,12 +31,20 @@ npm run watch -w @starktech/velo
 # Run all tests
 npm run test
 
-# Run tests for a specific package
+# Run tests for a specific package (core/cli/api use jest, the dashboard vitest)
 npm run test -w @starktech/core
 npm run test -w @starktech/velo
+npm run test -w @starktech/velo-api
+npm run test -w @starktech/velo-dashboard
 
 # Run a single test file (from repo root)
 npm test -w @starktech/core -- lib/common/utils.spec.ts
+
+# Tests for the repo scripts (part of `npm run test`)
+npm run test:scripts
+
+# Pack, install and drive the published packages (see Packaging below)
+scripts/smoke-pack.sh
 
 # Lint all packages
 npm run lint
@@ -49,7 +57,7 @@ npm run lint:fix
 
 ### Core Package (`packages/core/lib/`)
 
-Single-user. The service layer below is the one API surface the CLI (and later the API package) calls. Core uses relative imports (no `@/` alias) so other packages can consume it.
+The service layer below is the one API surface the CLI and the API call. Core is never built on its own: the other packages import its TypeScript source and bundle it, so it uses relative imports (no `@/` alias).
 
 - **`types.ts`** — Zod schemas (`createEventSchema`, `updateEventSchema`, `listEventsSchema`, `timeframeSchema`) and types (`WorkEvent`, `Stats`, `GroupedEvent`, `Page`). Timeframe format is `<number><unit>` (e.g., `30m`, `1.5h`, `2d`); `minutes` is stored on each event for SQL aggregation.
 - **`common/config.ts`** — Config at `~/.velo/config.json` (override the directory with `VELO_HOME`), validated with zod and merged with defaults: `databaseFilePath`, `api: {host, port}`, `dashboard: {port}`. Also `getRunPath()` (`~/.velo/run`) for pid files/logs.
@@ -57,18 +65,17 @@ Single-user. The service layer below is the one API surface the CLI (and later t
 - **`migrations/`** — Embedded knex migrations (no migration files on disk). Add new ones to `MIGRATIONS` + `MIGRATION_MAP`.
 - **`data/workEvent.ts`** — `createEvent`, `getEvent`, `listEvents` (term/project/date filters, pagination), `updateEvent`, `deleteEvent` (soft delete), `listProjects`. Inputs are validated by the zod schemas, so callers may pass raw input.
 - **`data/stats.ts`** — `getStats(filter)`: totals, by project, by local day.
-- **`data/import.ts`, `import/`** — `importEvents` (bulk, idempotent by id, dry-run), `csvToEvents` (velo/busybee-x export and legacy Busywork log formats; content-derived ids), `busybeeRowToEvent`.
+- **`data/import.ts`, `import/`** — `importEvents` (bulk, idempotent by id, dry-run), `csvToEvents` (the `velo export` format and the legacy Busywork Slack log; content-derived ids).
 - **`common/group.ts`** — Pure helpers `groupEvents` and `eventsToCsv` (no node imports, safe for the browser).
-- **`common/utils.ts`, `dates.ts`, `uuid.ts`, `errors.ts`** — Timeframe parsing/formatting, date helpers, UUID v7 (`crypto`-based, no dependency), `errorMessage`.
+- **`common/utils.ts`, `dates.ts`, `uuid.ts`, `errors.ts`, `version.ts`** — Timeframe parsing/formatting, date helpers, UUID v7 (`crypto`-based, no dependency), `errorMessage`, `versionsCompatible`.
 - **`testing/memoryDb.ts`** — In-memory migrated SQLite for specs.
-- **`index.ts`** — Public API exports.
+- **`index.ts`** — Public API exports. **`browser.ts`** — the `@starktech/core/browser` entry the dashboard uses (see Dashboard).
 
 ### CLI Package (`packages/cli/lib/`)
 
 - **`main.ts`** — Commander.js program entry point.
-- **`commands/`** — One file per command: `init`, `configure` (`--api-host/--api-port/--dashboard-port`), `log`, `list`, `edit`, `rm`, `stats`, `projects`, `export`, `import` (`csv`, `postgres`), and `services.ts`: `status`, `start`, `stop`, `open`, plus `api|dashboard start|stop|restart|status|logs`. `format.ts`/`options.ts`/`prompt.ts` hold shared output, filter flags and confirmation. Commands throw; `main.ts` prints `error: <message>` and exits 1 (`VELO_DEBUG=1` for stack traces). `rm`/`edit` accept the full id or the trailing characters shown in `velo list`.
+- **`commands/`** — One file per command: `init`, `configure` (`--api-host/--api-port/--dashboard-port`), `log`, `list`, `edit`, `rm`, `stats`, `projects`, `export`, `import csv`, `autostart.ts` (`service …`, see Autostart), and `services.ts`: `status`, `start`, `stop`, `open`, plus `api|dashboard start|stop|restart|status|logs`. `lib/format.ts`/`options.ts`/`prompt.ts` hold shared output, filter flags and confirmation. Commands throw; `main.ts` prints `error: <message>` and exits 1 (`VELO_DEBUG=1` for stack traces). `rm`/`edit` accept the full id or the trailing characters shown in `velo list`.
 - Tests run the real commands in-process against an in-memory DB (`lib/testing/run.ts`). `commander` is ESM-only, so `jest.config.ts` transforms it.
-- `pg` is an optional dependency, loaded lazily by `import postgres` only.
 - The CLI builds to `dist/main.js` via esbuild (ESM, Node 22 target, `commander` externalized).
 
 ### Managing the optional services (`packages/cli/lib/services/`)
@@ -98,34 +105,34 @@ The CLI never imports `@starktech/velo-api`/`velo-dashboard`; it finds their bin
 
 - **`main.ts`** — `velo-api` bin: `--host`/`--port` override `config.api`; SIGTERM/SIGINT close the server and DB. Exits 1 with a clear message on a bad port or `EADDRINUSE`.
 - **`app.ts`** — `createApp(options)` builds the Express app without listening (this is what tests drive with supertest). **`server.ts`** — `startServer(config)` inits the DB and binds.
-- **Routes** (`routes/`): `GET /api/health` (name, version, pid, db path; used by the CLI to detect the API), `/api/events` (list/create) and `/api/events/:id` (get/PUT/DELETE), `/api/projects`, `/api/stats`, `/api/export.csv`. List/stats/export filters: `term`, `project` (repeatable), `min_date`, `max_date`; list also `page`, `pageSize`. Errors are `{error, issues?}` JSON (zod errors → 400).
+- **Routes**: `GET /api/health` in `app.ts` (`name`, `version`, `pid`, `uptimeSeconds`, `databaseFilePath`, `home`; what the CLI probes), `routes/events.ts` (`/api/events` list/create, `/api/events/:id` get/PUT/DELETE) and `routes/reports.ts` (`/api/projects`, `/api/stats`, `/api/export.csv`). List/stats/export filters: `term`, `project` (repeatable), `min_date`, `max_date`; list also `page`, `pageSize`. Errors are `{error, issues?}` JSON (zod errors → 400).
 - **No authentication by design**, so `security.ts` guards the browser attack surface: loopback-only `Host` header (anti DNS-rebinding), only the dashboard origin (plus `VELO_ALLOWED_ORIGINS`) may send an `Origin`, and writes require `Content-Type: application/json`. Keep these when adding routes.
 - Express 5: `app.listen`'s callback receives bind errors, so don't ignore its argument. Handlers may be async and throw.
 - Built with esbuild like the CLI; `express`, `knex`, `better-sqlite3` are external runtime dependencies, core and zod are bundled. `__VERSION__` is injected at build time.
 
 ### Dashboard Package (`packages/dashboard/`)
 
-A port of the busybee-x ("chrono") UI; it must keep looking the same. Tailwind v4 + shadcn/Radix + Recharts + react-hook-form, Vitest + Testing Library.
-- **Do not "fix" the shadcn tokens.** `src/index.css` is copied from busybee-x and defines only `background/foreground/primary/secondary`; the components rely on `bg-input`, `bg-card` etc. being *undefined* (it's what makes the original look the way it does), and the app deliberately does not import an animation plugin. Adding the usual shadcn theme variables or `tw-animate-css` changes the look. Body keeps `antialiased`; the font is Arial.
+Tailwind v4 + shadcn/Radix + Recharts + react-hook-form, Vitest + Testing Library. The look is deliberate: keep it unless a change is asked for.
+- **Do not "fix" the shadcn tokens.** `src/index.css` defines only `background/foreground/primary/secondary`; the components rely on `bg-input`, `bg-card` etc. being *undefined* (it's what gives the dashboard its look), and the app deliberately does not import an animation plugin. Adding the usual shadcn theme variables or `tw-animate-css` changes the look. Body keeps `antialiased`; the font is Arial.
 - **Toasts** use sonner (`src/components/ui/sonner.tsx`: `theme="dark"`, `richColors`, sonner's own styling). Call `toast.success/error(title, {description})` from `"sonner"`. Don't use shadcn's sonner template that maps `--popover`/`--normal-bg` variables: those tokens are undefined here.
-- **Layout**: `src/App.tsx` (page), `src/components/` (ported components; `ui/` is shadcn), `src/lib/api.ts` (the only place that calls `fetch`; `ApiError.status === 0` means the API is unreachable), `src/lib/config.ts` (reads `/config.json` for `apiUrl`), `src/lib/date-ranges.ts` (date-filter ranges and the 14-day pay periods anchored on 2025-08-02, calendar arithmetic so DST-safe).
+- **Layout**: `src/App.tsx` (page), `src/components/` (`ui/` is shadcn), `src/lib/api.ts` (the only place that calls `fetch`; `ApiError.status === 0` means the API is unreachable), `src/lib/config.ts` (reads `/config.json` for `apiUrl`), `src/lib/filter-storage.ts` (the persisted filter keys), `src/lib/date-ranges.ts` (date-filter ranges and the 14-day pay periods anchored on 2025-08-02, calendar arithmetic so DST-safe).
 - **Core is shared via `@starktech/core/browser`** (types, `groupEvents`, timeframe helpers, `formatDateTime`). That entry must stay free of node/db/zod runtime imports; `core/lib/browser.spec.ts` enforces it. Events carry `timeframe` (string, e.g. `1.5h`) and `minutes` (number).
-- **Server** (`server/`): `velo-dashboard --port <n> --api-url <url>` serves `dist/app` on 127.0.0.1 and `GET /config.json` → `{name:"velo-dashboard", version, pid, apiUrl}` (what the CLI probes). `npm run build` = `vite build` (to `dist/app`) then esbuild (to `dist/main.js`).
+- **Server** (`server/`): `velo-dashboard --port <n> --api-url <url>` serves `dist/app` on 127.0.0.1 and `GET /config.json` → `{name:"velo-dashboard", version, pid, apiUrl, home}` (what the CLI probes). `npm run build` = `vite build` (to `dist/app`) then esbuild (to `dist/main.js`).
 - **Dev**: run the API (`velo api start`), then `npm run dev -w @starktech/velo-dashboard` (Vite on :5173). `/api` is proxied to `VELO_API_URL` (default `http://127.0.0.1:4317`); the proxy strips `Origin` because the API only accepts browser origins from the dashboard's configured port.
-- **Parity check**: when changing UI, compare against the original by running busybee-x against a Postgres with the same data and pixel-diffing screenshots of both (Phase 5 got desktop within ~0.1%).
+- **Checking UI changes**: seed a sandbox (`node scripts/seed-dev.mjs`, see `docs/development.md`) and compare screenshots before and after at desktop and mobile widths; a change meant to be invisible should diff clean.
 
 ### Packaging and releases
 
-Published: `@starktech/velo` (cli), `@starktech/velo-api`, `@starktech/velo-dashboard`, always at one version. `@starktech/core` is private and bundled; **it must never appear in a published package's `dependencies`** (it's a devDependency of cli and api).
-- Each published `package.json` has `files: ["dist", "!dist/**/*.map"]`, `engines`, `license`, `repository`, `publishConfig.access: public`, and its own `LICENSE`/`README.md` (the READMEs are what npm shows). Runtime dependencies are exactly the bare imports left in the bundle: cli `commander`, `knex`, `better-sqlite3` (+ optional `pg`), api `express`, `knex`, `better-sqlite3`, dashboard none. When you add an import that esbuild leaves external, add the dependency.
-- Versions: `npm run version:set -- X.Y.Z` (updates root + 3 packages + lockfile); `npm run version:check -- vX.Y.Z` is what the release workflow runs against the tag. Versions are baked into each bundle at build time (`__VERSION__` via esbuild `define`; the CLI no longer reads package.json).
-- **`scripts/smoke-pack.sh`** is the real check that the published shape works: it packs the tarballs, installs them into an empty prefix, and drives the installed commands (including the CLI alone). It also fails on source maps, sources, a missing LICENSE/README, or an unpublishable dependency. Run it after touching any manifest, `files`, esbuild config or an external import; CI runs it too. Don't `git checkout` a manifest to undo an experiment: that discards uncommitted edits (this happened once).
-- Workflows: `.github/workflows/ci.yml` (lint, build, test, `npm audit --omit=dev` on Ubuntu + Node 24 only, and the packaged-install job; `engines` still says `>=22`, which CI does not test) and `release.yml` (tag `v*` → verify → publish api, dashboard, cli with provenance → GitHub release; prereleases go to the `next` dist-tag). Both were checked with `actionlint`. See `docs/releasing.md` for the one-time npm/GitHub setup.
+Published: `@starktech/velo` (cli), `@starktech/velo-api`, `@starktech/velo-dashboard`, always at one version. `@starktech/core` is private and bundled; **it must never appear in a published package's `dependencies`** (it's a devDependency of cli, api and dashboard).
+- Each published `package.json` has `files: ["dist", "!dist/**/*.map"]`, `engines`, `license`, `repository`, `publishConfig.access: public`, and its own `LICENSE`/`README.md` (the READMEs are what npm shows). Runtime dependencies are exactly the bare imports left in the bundle: cli `commander`, `knex`, `better-sqlite3`; api `express`, `knex`, `better-sqlite3`; dashboard none (everything it uses is a devDependency, bundled by Vite/esbuild). The CLI's esbuild `external` list also names knex's unused dialect drivers (`pg`, `mysql`, …) so esbuild doesn't try to bundle them; they are not dependencies. When you add an import that esbuild leaves external, add the dependency.
+- Versions: `npm run version:set -- X.Y.Z` (updates root + 3 packages + lockfile); `npm run version:check -- vX.Y.Z` is what the release workflow runs against the tag. Versions are baked into each bundle at build time (`__VERSION__` via esbuild `define`); nothing reads package.json at runtime.
+- **`scripts/smoke-pack.sh`** is the real check that the published shape works: it packs the tarballs, installs them into an empty prefix, and drives the installed commands (including the CLI alone). It also fails on source maps, sources, a missing LICENSE/README, or an unpublishable dependency. Run it after touching any manifest, `files`, esbuild config or an external import; CI runs it too. Locally, its last check ("cli alone … explains how to install it") fails if `velo-api` is installed globally, because the CLI then finds it on PATH; that's expected. Don't `git checkout` a manifest to undo an experiment: that discards uncommitted edits (this happened once).
+- Workflows: `.github/workflows/ci.yml` (lint, build, test, `npm audit --omit=dev` on Ubuntu + Node 24 only, and the packaged-install job; `engines` still says `>=22`, which CI does not test) and `release.yml` (tag `v*` → verify → publish api, dashboard, cli with provenance → GitHub release; prereleases go to the `next` dist-tag). Check them with `actionlint` after editing. See `docs/releasing.md` for the one-time npm/GitHub setup.
 - **Compatibility rule** (`versionsCompatible` in core): pre-1.0 the minor must match; from 1.0 the major. `velo status` and the dashboard warn when the CLI, API and dashboard disagree, so bump the minor for anything that changes the API or CLI behaviour.
 
 ### Key Conventions
 
-- **TypeScript path alias**: `@/*` maps to `./lib/*` in both packages.
-- **Core** compiles to CommonJS; **CLI** compiles to ESM.
-- Coverage thresholds: 70% across branches, functions, lines, and statements.
+- **TypeScript path alias**: `@/*` maps to `./lib/*` in cli and api, `./src/*` in the dashboard; core doesn't use it.
+- cli, api and dashboard are ESM (`"type": "module"`, bundled by esbuild/Vite); jest runs ts-jest in CommonJS mode. Core has no build of its own.
+- No coverage thresholds are enforced; keep new code covered by `*.spec.ts(x)` files next to it.
 - Prettier: no semicolons, double quotes, 100-char line width, trailing commas everywhere.
